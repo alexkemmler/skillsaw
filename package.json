@@ -1,0 +1,13 @@
+{
+  "name": "skillsaw",
+  "version": "0.1.0",
+  "description": "Candidate evaluation chatbot WordPress plugin",
+  "private": true,
+  "scripts": {
+    "build": "wp-scripts build src/admin/index.js --output-path=assets/js",
+    "start": "wp-scripts start src/admin/index.js --output-path=assets/js"
+  },
+  "devDependencies": {
+    "@wordpress/scripts": "^30.0.0"
+  }
+}

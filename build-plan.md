@@ -262,3 +262,29 @@ skillsaw/
 ├── package.json
 └── .wp-env.json                  # Local dev environment config
 ```
+
+---
+
+## Session Log
+
+### Session 1 — 2026-05-11
+
+**Accomplished:**
+- Defined full architecture, technology stack, and database schema
+- Clarified all key product decisions (Greenhouse integration, candidate identity via email, one-sitting sessions, 25MB file limit, skill rating four-point scale, critique document generation flow)
+- Investigated Automattic's application form — confirmed it is a plain HTML `<form id="application_form">` on the WP page, NOT a Greenhouse iframe. Hidden input + JS intercept approach will work for Greenhouse integration.
+- Set up development environment: GitHub repo, Docker Desktop, wp-env, @wordpress/scripts
+- Built and verified Phase 1: plugin foundation, 6 custom DB tables, admin menu, settings page
+- Built and verified Phase 2: full REST API, Anthropic Claude client, React admin dashboard with Roles tab (CRUD, skills, document upload, critique generation, status toggle, embed code) and Candidates tab (session list, skill chips, transcript modal)
+
+**Bugs fixed during session:**
+- wp-env failing due to space in folder name → renamed to RSM_Skillsaw
+- `apiFetch` returning "not a valid JSON response" → root cause was ambiguous `status` column in SQL JOIN (needed `s.status`)
+- `create_role` returning "Role not found" → `WP_REST_Request` constructor doesn't accept URL params; fixed with `set_url_params()`
+- REST API nonce not configured → fixed with `wp_localize_script` + `apiFetch.use(createNonceMiddleware(...))`
+
+**Decisions deferred:**
+- Whether to use Automattic's internal `training-simulator` chat library for Phase 3 — Alex checking with co-workers
+
+**Up next (Phase 3):**
+Start a fresh Claude Code session. Say: "I'm building a WordPress plugin called Skillsaw. The code is at `/Users/alexkemmler/RSM_Skillsaw/`. Read `build-plan.md` and the existing code, then let's build Phase 3 — the candidate chat embed."

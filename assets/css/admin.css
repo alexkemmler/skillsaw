@@ -1,0 +1,272 @@
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+.skillsaw-app { max-width: 1200px; }
+.skillsaw-subtitle { color: #50575e; margin-bottom: 12px; }
+
+/* ── Filter bar ─────────────────────────────────────────────────────────── */
+.skillsaw-filter-bar {
+	display: flex;
+	gap: 12px;
+	align-items: center;
+	flex-wrap: wrap;
+	margin: 16px 0;
+}
+.skillsaw-search {
+	height: 36px;
+	padding: 0 10px;
+	border: 1px solid #c3c4c7;
+	border-radius: 3px;
+	font-size: 13px;
+	min-width: 240px;
+}
+.skillsaw-add-role { display: flex; gap: 8px; align-items: center; margin-left: auto; }
+.skillsaw-add-role .components-base-control { margin-bottom: 0; }
+.skillsaw-add-skill { display: flex; gap: 8px; align-items: flex-end; }
+.skillsaw-add-skill .components-base-control { margin-bottom: 0; }
+
+/* ── Results meta ───────────────────────────────────────────────────────── */
+.skillsaw-results-meta {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	margin-bottom: 8px;
+	font-size: 13px;
+	color: #50575e;
+}
+.skillsaw-legend { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ── Skill chips ────────────────────────────────────────────────────────── */
+.skillsaw-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.skillsaw-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	height: 24px;
+	padding: 0 8px;
+	border-radius: 4px;
+	border: 1px solid #c3c4c7;
+	background: #f0f0f1;
+	font-size: 12px;
+	color: #50575e;
+	white-space: nowrap;
+}
+.skillsaw-chip-dot {
+	width: 6px; height: 6px;
+	border-radius: 50%;
+	background: #50575e;
+	flex-shrink: 0;
+}
+.skillsaw-chip--strong { background: #edfaef; border-color: #b8e6c1; color: #0a4b78; }
+.skillsaw-chip--strong .skillsaw-chip-dot { background: #1d894b; }
+.skillsaw-chip--met { background: #f0f0f1; }
+.skillsaw-chip--met .skillsaw-chip-dot { background: #50575e; }
+.skillsaw-chip--unmet { background: #f0f0f1; opacity: 0.7; }
+.skillsaw-chip--fail { background: #f6e6e3; border-color: #e0a3a0; color: #6b1f1f; }
+.skillsaw-chip--fail .skillsaw-chip-dot { background: #d63638; }
+.skillsaw-chip-remove {
+	background: none; border: none; cursor: pointer;
+	color: inherit; opacity: 0.6; padding: 0; line-height: 1;
+	font-size: 14px;
+}
+.skillsaw-chip-remove:hover { opacity: 1; }
+
+/* ── Pill badges ────────────────────────────────────────────────────────── */
+.skillsaw-pill {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 3px;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+}
+.skillsaw-pill--draft    { background: #f0f0f1; color: #50575e; }
+.skillsaw-pill--critique { background: #f4ecff; color: #7a3cb8; }
+
+/* ── Status toggle ──────────────────────────────────────────────────────── */
+.skillsaw-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	background: none;
+	border: none;
+	cursor: pointer;
+	padding: 0;
+	font-size: 13px;
+	color: #50575e;
+}
+.skillsaw-toggle-thumb {
+	position: relative;
+	display: inline-block;
+	width: 32px; height: 18px;
+	background: #c3c4c7;
+	border-radius: 9px;
+	transition: background 0.15s;
+	flex-shrink: 0;
+}
+.skillsaw-toggle-thumb::after {
+	content: '';
+	position: absolute;
+	top: 2px; left: 2px;
+	width: 14px; height: 14px;
+	border-radius: 50%;
+	background: #fff;
+	transition: left 0.15s;
+}
+.skillsaw-toggle--on .skillsaw-toggle-thumb { background: #00a32a; }
+.skillsaw-toggle--on .skillsaw-toggle-thumb::after { left: 16px; }
+
+/* ── Roles list ─────────────────────────────────────────────────────────── */
+.skillsaw-roles-list { border: 1px solid #dcdcde; border-radius: 3px; }
+.skillsaw-role-row { border-bottom: 1px solid #dcdcde; }
+.skillsaw-role-row:last-child { border-bottom: none; }
+.skillsaw-role-row-header {
+	display: grid;
+	grid-template-columns: 24px 1fr 120px 140px 120px 130px 60px 110px 70px;
+	gap: 12px;
+	align-items: center;
+	padding: 12px 16px;
+	cursor: pointer;
+	background: #fff;
+	transition: background 0.1s;
+}
+.skillsaw-role-row-header:hover { background: #f6f7f7; }
+.skillsaw-role-row--expanded .skillsaw-role-row-header { background: #f6f7f7; }
+.skillsaw-chevron { color: #50575e; font-size: 12px; }
+.skillsaw-role-title { font-weight: 600; }
+.skillsaw-role-id { display: block; font-size: 11px; font-weight: 400; color: #8c8f94; }
+.skillsaw-role-team, .skillsaw-role-division { font-size: 13px; color: #50575e; }
+.skillsaw-role-applicants { text-align: right; font-size: 13px; color: #50575e; }
+.skillsaw-ok { color: #1d894b; font-size: 12px; }
+.skillsaw-err { color: #d63638; font-size: 12px; }
+
+/* ── Embed button ───────────────────────────────────────────────────────── */
+.skillsaw-embed-btn {
+	height: 28px;
+	padding: 0 10px;
+	border: 1px solid #c3c4c7;
+	border-radius: 3px;
+	background: #fff;
+	color: #2271b1;
+	font-size: 12px;
+	cursor: pointer;
+	transition: color 0.15s, border-color 0.15s;
+}
+.skillsaw-embed-btn:hover { border-color: #2271b1; }
+.skillsaw-embed-btn--copied { color: #00761e; border-color: #00761e; }
+.skillsaw-embed-btn:disabled { background: #f0f0f1; color: #a7aaad; border-color: #dcdcde; cursor: not-allowed; }
+
+/* ── Role config panel ──────────────────────────────────────────────────── */
+.skillsaw-role-config {
+	padding: 20px 24px 24px;
+	background: #f6f7f7;
+	border-top: 1px solid #dcdcde;
+}
+.skillsaw-config-section { margin-bottom: 24px; }
+.skillsaw-config-section h4 { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: #1d2327; }
+.skillsaw-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.skillsaw-config-footer { display: flex; gap: 12px; align-items: center; margin-top: 8px; }
+
+/* ── Documents ──────────────────────────────────────────────────────────── */
+.skillsaw-doc-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 0;
+	border-bottom: 1px solid #ededed;
+	font-size: 13px;
+}
+.skillsaw-doc-row--critique { padding-left: 24px; background: none; }
+.skillsaw-doc-type {
+	font-size: 10px; font-weight: 700;
+	background: #f0f0f1; border: 1px solid #c3c4c7;
+	padding: 1px 5px; border-radius: 2px; color: #50575e;
+	flex-shrink: 0;
+}
+.skillsaw-doc-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skillsaw-doc-actions { display: flex; gap: 6px; align-items: center; margin-left: auto; flex-shrink: 0; }
+.skillsaw-upload-area { margin-top: 10px; }
+.skillsaw-upload-label {
+	display: inline-block;
+	padding: 6px 14px;
+	border: 1px dashed #c3c4c7;
+	border-radius: 3px;
+	color: #2271b1;
+	cursor: pointer;
+	font-size: 13px;
+	transition: border-color 0.15s;
+}
+.skillsaw-upload-label:hover { border-color: #2271b1; }
+
+/* ── Candidates list ────────────────────────────────────────────────────── */
+.skillsaw-candidates-list { border: 1px solid #dcdcde; border-radius: 3px; }
+.skillsaw-candidate-row {
+	display: grid;
+	grid-template-columns: 220px 180px 1fr 140px;
+	gap: 16px;
+	align-items: center;
+	padding: 12px 16px;
+	border-bottom: 1px solid #dcdcde;
+	background: #fff;
+}
+.skillsaw-candidate-row:last-child { border-bottom: none; }
+.skillsaw-candidate-row:hover { background: #f6f7f7; }
+.skillsaw-candidate-identity { display: flex; align-items: center; gap: 10px; }
+.skillsaw-avatar {
+	width: 32px; height: 32px;
+	border-radius: 50%;
+	background: #0a4b78;
+	color: #fff;
+	display: flex; align-items: center; justify-content: center;
+	font-size: 12px; font-weight: 600;
+	flex-shrink: 0;
+}
+.skillsaw-candidate-name { font-weight: 600; font-size: 13px; }
+.skillsaw-candidate-email { font-size: 12px; color: #8c8f94; }
+.skillsaw-candidate-role { font-size: 13px; color: #1d2327; }
+.skillsaw-candidate-role small { display: block; font-size: 11px; color: #8c8f94; }
+.skillsaw-candidate-actions { display: flex; gap: 10px; align-items: center; }
+.skillsaw-duration { font-size: 12px; color: #8c8f94; }
+
+/* ── Transcript modal ───────────────────────────────────────────────────── */
+.skillsaw-transcript-meta {
+	display: flex; gap: 16px;
+	font-size: 12px; color: #50575e;
+	margin-bottom: 16px;
+	padding-bottom: 12px;
+	border-bottom: 1px solid #dcdcde;
+}
+.skillsaw-transcript-messages { display: flex; flex-direction: column; gap: 12px; }
+.skillsaw-msg { display: flex; flex-direction: column; gap: 4px; }
+.skillsaw-msg--user { align-items: flex-end; }
+.skillsaw-msg-who { font-size: 11px; font-weight: 600; color: #8c8f94; padding: 0 4px; }
+.skillsaw-msg-bubble {
+	max-width: 80%;
+	padding: 10px 14px;
+	border-radius: 8px;
+	font-size: 14px;
+	line-height: 1.5;
+}
+.skillsaw-msg--bot .skillsaw-msg-bubble { background: #f0f0f1; color: #1d2327; }
+.skillsaw-msg--user .skillsaw-msg-bubble { background: #2271b1; color: #fff; }
+.skillsaw-msg-bubble p { margin: 0 0 8px; }
+.skillsaw-msg-bubble p:last-child { margin-bottom: 0; }
+
+/* ── File card ──────────────────────────────────────────────────────────── */
+.skillsaw-file-card {
+	display: flex; align-items: center; gap: 8px;
+	padding: 8px 10px;
+	background: rgba(0,0,0,0.08);
+	border-radius: 6px;
+	margin-bottom: 8px;
+	font-size: 12px;
+}
+.skillsaw-file-type {
+	font-size: 9px; font-weight: 700;
+	background: rgba(0,0,0,0.15);
+	padding: 2px 5px; border-radius: 2px;
+}
+.skillsaw-file-name { flex: 1; font-weight: 500; }
+.skillsaw-file-size { opacity: 0.7; }
+
+/* ── Misc ───────────────────────────────────────────────────────────────── */
+.skillsaw-empty { color: #8c8f94; padding: 24px 16px; text-align: center; }
+.skillsaw-error { color: #d63638; font-size: 12px; margin: 4px 0; }

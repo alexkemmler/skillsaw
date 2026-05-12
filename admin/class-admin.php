@@ -39,7 +39,29 @@ class Skillsaw_Admin {
 		if ( strpos( $hook, 'skillsaw' ) === false ) {
 			return;
 		}
-		// React bundles will be enqueued here in Phase 2.
+
+		$asset_file = SKILLSAW_PLUGIN_DIR . 'assets/js/index.asset.php';
+		$asset      = file_exists( $asset_file ) ? require $asset_file : array(
+			'dependencies' => array( 'wp-element', 'wp-components', 'wp-api-fetch' ),
+			'version'      => SKILLSAW_VERSION,
+		);
+
+		wp_enqueue_script(
+			'skillsaw-admin',
+			SKILLSAW_PLUGIN_URL . 'assets/js/index.js',
+			$asset['dependencies'],
+			$asset['version'],
+			true
+		);
+
+		wp_enqueue_style( 'wp-components' );
+
+		wp_enqueue_style(
+			'skillsaw-admin',
+			SKILLSAW_PLUGIN_URL . 'assets/css/admin.css',
+			array(),
+			SKILLSAW_VERSION
+		);
 	}
 
 	public function render_dashboard_page() {

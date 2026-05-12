@@ -54,6 +54,15 @@ class Skillsaw_Admin {
 			true
 		);
 
+		wp_localize_script(
+			'skillsaw-admin',
+			'skillsawData',
+			array(
+				'nonce'   => wp_create_nonce( 'wp_rest' ),
+				'rootUrl' => rest_url(),
+			)
+		);
+
 		wp_enqueue_style( 'wp-components' );
 
 		wp_enqueue_style(

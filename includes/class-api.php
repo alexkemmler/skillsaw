@@ -173,7 +173,9 @@ class Skillsaw_API {
 		$skills = $request->get_param( 'skills' ) ?? array();
 		$this->sync_skills( $role_id, $skills );
 
-		return $this->get_role( new WP_REST_Request( 'GET', '', array( 'id' => $role_id ) ) );
+		$get_request = new WP_REST_Request( 'GET' );
+		$get_request->set_url_params( array( 'id' => $role_id ) );
+		return $this->get_role( $get_request );
 	}
 
 	public function update_role( $request ) {
@@ -367,7 +369,7 @@ class Skillsaw_API {
 	public function get_candidates( $request ) {
 		global $wpdb;
 
-		$where  = array( 'status != %s' );
+		$where  = array( 's.status != %s' );
 		$values = array( 'in_progress' );
 
 		if ( $request->get_param( 'role_id' ) ) {

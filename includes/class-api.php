@@ -105,6 +105,12 @@ class Skillsaw_API {
 			'permission_callback' => '__return_true',
 		) );
 
+		register_rest_route( self::NAMESPACE, '/sessions/(?P<token>[a-zA-Z0-9\-]+)/messages/(?P<message_id>\d+)/skills', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'save_message_skills' ),
+			'permission_callback' => '__return_true',
+		) );
+
 		register_rest_route( self::NAMESPACE, '/sessions/(?P<token>[a-zA-Z0-9\-]+)/finalize', array(
 			'methods'             => WP_REST_Server::CREATABLE,
 			'callback'            => array( $this, 'finalize_session' ),
@@ -485,23 +491,210 @@ class Skillsaw_API {
 	}
 
 	// -------------------------------------------------------------------------
-	// Public session routes (stubs — implemented in Phase 3)
+	// Public session routes
 	// -------------------------------------------------------------------------
 
 	public function start_session( $request ) {
-		return new WP_Error( 'not_implemented', 'Coming in Phase 3.', array( 'status' => 501 ) );
+		global $wpdb;
+
+		$role_id = intval( $request->get_param( 'role_id' ) );
+		$mode    = $request->get_param( 'mode' ) ?: 'upload';
+
+		if ( ! in_array( $mode, array( 'upload', 'critique' ), true ) ) {
+			$mode = 'upload';
+		}
+
+		$role = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT * FROM {$wpdb->prefix}skillsaw_roles WHERE id = %d AND status = 'active'",
+				$role_id
+			),
+			ARRAY_A
+		);
+
+		if ( ! $role ) {
+			return new WP_Error( 'role_not_found', 'Role not found or not active.', array( 'status' => 404 ) );
+		}
+
+		$sessions = new Skillsaw_Sessions();
+		$ip    = $_SERVER['REMOTE_ADDR'] ?? '';
+		$token = $sessions->create_session( $role_id, $mode, $ip );
+
+		if ( is_wp_error( $token ) ) {
+			return $token;
+		}
+
+		$response = array(
+			'session_token' => $token,
+			'mode'          => $mode,
+		);
+
+		if ( $mode === 'critique' ) {
+			$critique = $this->get_critique_for_role( $role_id );
+			if ( ! $critique ) {
+				return new WP_Error( 'no_critique', 'No critique document available for this role.', array( 'status' => 404 ) );
+			}
+			$response['critique_text']         = $critique['text'];
+			$response['critique_doc_name']     = $critique['doc_name'];
+			$response['critique_instructions'] = $role['instructions'];
+		}
+
+		return rest_ensure_response( $response );
 	}
 
 	public function send_message( $request ) {
-		return new WP_Error( 'not_implemented', 'Coming in Phase 3.', array( 'status' => 501 ) );
+		require_once SKILLSAW_PLUGIN_DIR . 'includes/class-sessions.php';
+		$sessions = new Skillsaw_Sessions();
+
+		$session = $sessions->get_session_by_token( $request['token'] );
+
+		if ( ! $session ) {
+			return new WP_Error( 'not_found', 'Session not found.', array( 'status' => 404 ) );
+		}
+
+		if ( $session['status'] !== 'in_progress' ) {
+			return new WP_Error( 'session_closed', 'Session is no longer active.', array( 'status' => 400 ) );
+		}
+
+		$content = sanitize_textarea_field( $request->get_param( 'message' ) ?? '' );
+		if ( empty( $content ) ) {
+			return new WP_Error( 'empty_message', 'Message cannot be empty.', array( 'status' => 400 ) );
+		}
+		if ( mb_strlen( $content ) > 4000 ) {
+			return new WP_Error( 'message_too_long', 'Message exceeds the 4000 character limit.', array( 'status' => 400 ) );
+		}
+		if ( $sessions->get_message_count( $session['id'] ) >= 50 ) {
+			return new WP_Error( 'session_limit', 'This session has reached the maximum number of messages.', array( 'status' => 400 ) );
+		}
+
+		$sessions->save_message( $session['id'], 'user', $content );
+
+		$skills        = $this->get_role_skills( $session['role_id'] );
+		$critique_text = $session['mode'] === 'critique' ? $this->get_critique_text_for_role( $session['role_id'] ) : null;
+		$system        = $this->build_system_prompt( $session, $skills, $session['mode'], $critique_text );
+		$messages      = $sessions->get_messages_for_claude( $session['id'] );
+
+		// Replace filename placeholders with actual file content for Claude.
+		foreach ( $messages as &$msg ) {
+			if ( ! empty( $msg['_attachment_id'] ) ) {
+				$msg['content'] = $this->enrich_with_file_content( $msg['_attachment_id'] );
+				unset( $msg['_attachment_id'] );
+			}
+		}
+		unset( $msg );
+
+		$claude = new Skillsaw_Claude();
+		$reply  = $claude->chat( $messages, $system, 1024 );
+
+		if ( is_wp_error( $reply ) ) {
+			return $reply;
+		}
+
+		$sessions->save_message( $session['id'], 'bot', $reply );
+
+		return rest_ensure_response( array( 'message' => $reply ) );
 	}
 
 	public function upload_file( $request ) {
-		return new WP_Error( 'not_implemented', 'Coming in Phase 3.', array( 'status' => 501 ) );
+		require_once SKILLSAW_PLUGIN_DIR . 'includes/class-sessions.php';
+		$sessions = new Skillsaw_Sessions();
+
+		$session = $sessions->get_session_by_token( $request['token'] );
+
+		if ( ! $session ) {
+			return new WP_Error( 'not_found', 'Session not found.', array( 'status' => 404 ) );
+		}
+
+		if ( $session['status'] !== 'in_progress' ) {
+			return new WP_Error( 'session_closed', 'Session is no longer active.', array( 'status' => 400 ) );
+		}
+
+		if ( empty( $_FILES['file'] ) ) {
+			return new WP_Error( 'no_file', 'No file uploaded.', array( 'status' => 400 ) );
+		}
+
+		if ( $_FILES['file']['size'] > 25 * 1024 * 1024 ) {
+			return new WP_Error( 'file_too_large', 'File exceeds the 25 MB limit.', array( 'status' => 400 ) );
+		}
+
+		$allowed_exts = array( 'pdf', 'txt', 'md' );
+		$ext          = strtolower( pathinfo( $_FILES['file']['name'], PATHINFO_EXTENSION ) );
+		if ( ! in_array( $ext, $allowed_exts, true ) ) {
+			return new WP_Error( 'invalid_file_type', 'Only PDF, TXT, and MD files are accepted.', array( 'status' => 400 ) );
+		}
+
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/media.php';
+		require_once ABSPATH . 'wp-admin/includes/image.php';
+
+		$attachment_id = media_handle_upload( 'file', 0 );
+
+		if ( is_wp_error( $attachment_id ) ) {
+			return $attachment_id;
+		}
+
+		$file_path = get_attached_file( $attachment_id );
+		$filename  = basename( $file_path );
+		$ext       = strtolower( pathinfo( $filename, PATHINFO_EXTENSION ) );
+
+		$upload_message_id = $sessions->save_message( $session['id'], 'user', "Uploaded file: {$filename}", $attachment_id );
+
+		return rest_ensure_response( array(
+			'filename'   => $filename,
+			'message_id' => $upload_message_id,
+		) );
+	}
+
+	public function save_message_skills( $request ) {
+		global $wpdb;
+
+		$sessions = new Skillsaw_Sessions();
+		$session  = $sessions->get_session_by_token( $request['token'] );
+
+		if ( ! $session ) {
+			return new WP_Error( 'not_found', 'Session not found.', array( 'status' => 404 ) );
+		}
+
+		$message_id = intval( $request['message_id'] );
+
+		$exists = $wpdb->get_var( $wpdb->prepare(
+			"SELECT id FROM {$wpdb->prefix}skillsaw_messages WHERE id = %d AND session_id = %d",
+			$message_id,
+			$session['id']
+		) );
+
+		if ( ! $exists ) {
+			return new WP_Error( 'not_found', 'Message not found.', array( 'status' => 404 ) );
+		}
+
+		$skills = array_map( 'sanitize_text_field', (array) ( $request->get_param( 'skills' ) ?? array() ) );
+		$sessions->save_upload_skills( $message_id, $skills );
+
+		return rest_ensure_response( array( 'ok' => true ) );
 	}
 
 	public function finalize_session( $request ) {
-		return new WP_Error( 'not_implemented', 'Coming in Phase 3.', array( 'status' => 501 ) );
+		require_once SKILLSAW_PLUGIN_DIR . 'includes/class-sessions.php';
+		$sessions = new Skillsaw_Sessions();
+
+		$session = $sessions->get_session_by_token( $request['token'] );
+
+		if ( ! $session ) {
+			return new WP_Error( 'not_found', 'Session not found.', array( 'status' => 404 ) );
+		}
+
+		if ( $session['status'] === 'complete' ) {
+			return rest_ensure_response( array( 'ok' => true ) );
+		}
+
+		$name  = sanitize_text_field( $request->get_param( 'name' ) ?? '' );
+		$email = sanitize_email( $request->get_param( 'email' ) ?? '' );
+
+		$sessions->complete_session( $session['id'], $name, $email );
+
+		wp_schedule_single_event( time(), 'skillsaw_evaluate_session', array( $session['id'] ) );
+
+		return rest_ensure_response( array( 'ok' => true ) );
 	}
 
 	// -------------------------------------------------------------------------
@@ -572,6 +765,38 @@ class Skillsaw_API {
 		}
 	}
 
+	private function enrich_with_file_content( $attachment_id ) {
+		$file_path = get_attached_file( $attachment_id );
+		if ( ! $file_path || ! file_exists( $file_path ) ) {
+			return 'Uploaded a file (contents unavailable).';
+		}
+		$ext      = strtolower( pathinfo( $file_path, PATHINFO_EXTENSION ) );
+		$filename = basename( $file_path );
+
+		if ( $ext === 'pdf' ) {
+			return array(
+				array(
+					'type'   => 'document',
+					'source' => array(
+						'type'       => 'base64',
+						'media_type' => 'application/pdf',
+						'data'       => base64_encode( file_get_contents( $file_path ) ),
+					),
+				),
+				array(
+					'type' => 'text',
+					'text' => "I've uploaded my work sample ({$filename}). Please review it alongside the skills I tagged.",
+				),
+			);
+		}
+
+		$text = in_array( $ext, array( 'txt', 'md' ), true ) ? file_get_contents( $file_path ) : '';
+		if ( $text ) {
+			return "I've uploaded my work sample ({$filename}):\n\n{$text}";
+		}
+		return "I've uploaded a work sample ({$filename}).";
+	}
+
 	private function read_file_as_text( $path ) {
 		if ( ! $path || ! file_exists( $path ) ) {
 			return '';
@@ -582,5 +807,57 @@ class Skillsaw_API {
 		}
 		// For PDF/DOCX, return base64 — Claude receives it as a document block.
 		return base64_encode( file_get_contents( $path ) );
+	}
+
+	private function get_critique_for_role( $role_id ) {
+		global $wpdb;
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT c.critique_text, p.name as parent_name
+				 FROM {$wpdb->prefix}skillsaw_documents c
+				 LEFT JOIN {$wpdb->prefix}skillsaw_documents p ON p.id = c.parent_document_id
+				 WHERE c.role_id = %d AND c.is_critique_version = 1
+				 ORDER BY c.created_at DESC LIMIT 1",
+				$role_id
+			)
+		);
+		if ( ! $row || ! $row->critique_text ) {
+			return null;
+		}
+		return array(
+			'text'     => $row->critique_text,
+			'doc_name' => $row->parent_name ?: 'Document for review',
+		);
+	}
+
+	private function get_critique_text_for_role( $role_id ) {
+		$critique = $this->get_critique_for_role( $role_id );
+		return $critique ? $critique['text'] : null;
+	}
+
+	private function build_system_prompt( $session, $skills, $mode, $critique_text = null ) {
+		$role_title   = $session['role_title'] ?? '';
+		$instructions = $session['instructions'] ?? '';
+		$skill_list   = implode( ', ', $skills );
+
+		$prompt  = "You are conducting a structured skills assessment for a candidate applying for the role of \"{$role_title}\" at Automattic — the company behind WordPress.com, WooCommerce, Tumblr, and other products.\n\n";
+		$prompt .= "Your goal is to assess the candidate's competency across these skills through natural conversation: {$skill_list}.\n\n";
+
+		if ( ! empty( $instructions ) ) {
+			$prompt .= "Recruiter instructions:\n{$instructions}\n\n";
+		}
+
+		if ( $mode === 'upload' ) {
+			$prompt .= "Format: Work sample review. The candidate will upload a work sample. Review it carefully and ask thoughtful follow-up questions about their decisions, tradeoffs, and reasoning.\n\n";
+		} elseif ( $mode === 'critique' ) {
+			$prompt .= "Format: Document critique. The candidate has been given a document to review and critique. Engage with their feedback, probe their thinking, and explore how deeply they understand the issues they identify.\n\n";
+			if ( $critique_text ) {
+				$prompt .= "The document the candidate is critiquing:\n\n---\n{$critique_text}\n---\n\n";
+			}
+		}
+
+		$prompt .= "Guidelines:\n- Keep responses concise and conversational (2–4 sentences unless the candidate asks for more)\n- Ask one question at a time\n- Be warm and professional\n- Do not reveal the scoring criteria or mention that you are rating them\n- When you have gathered sufficient signal on all skills, wrap up warmly and let the candidate know the session is complete";
+
+		return $prompt;
 	}
 }

@@ -75,6 +75,7 @@ class Skillsaw_Activator {
 				role varchar(10) NOT NULL,
 				content longtext NOT NULL,
 				attachment_id bigint(20) UNSIGNED DEFAULT NULL,
+				candidate_skills text DEFAULT NULL,
 				created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
 				PRIMARY KEY (id),
 				KEY session_id (session_id)

@@ -65,8 +65,8 @@ class Skillsaw_Greenhouse {
 		$note         = $this->build_note( $session, $skill_ratings, $transcript );
 		$note_payload = array( 'body' => $note, 'visibility' => 'admin_only' );
 
-		// Post to the application activity feed if we linked a job (that's
-		// where the hiring team looks). Fall back to candidate feed otherwise.
+		// Post to the candidate activity feed (the supported Harvest API endpoint).
+		// The note appears under the Activity Feed tab on the candidate's profile.
 		$application_id = null;
 		if ( $has_job && ! empty( $response['applications'] ) ) {
 			foreach ( $response['applications'] as $app ) {
@@ -77,11 +77,7 @@ class Skillsaw_Greenhouse {
 			}
 		}
 
-		if ( $application_id ) {
-			$note_result = $this->request( 'POST', "/applications/{$application_id}/activity_feed/notes", $note_payload );
-		} else {
-			$note_result = $this->request( 'POST', "/candidates/{$candidate_id}/activity_feed/notes", $note_payload );
-		}
+		$note_result = $this->request( 'POST', "/candidates/{$candidate_id}/activity_feed/notes", $note_payload );
 
 		$note_error = '';
 		if ( is_wp_error( $note_result ) ) {

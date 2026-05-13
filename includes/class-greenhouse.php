@@ -85,6 +85,22 @@ class Skillsaw_Greenhouse {
 			error_log( 'Skillsaw: Greenhouse note failed — ' . $note_error );
 		}
 
+		// Attach the assessment as a PDF to the candidate.
+		$pdf          = $this->build_pdf( $session, $skill_ratings, $transcript );
+		$pdf_result   = $this->request( 'POST', "/candidates/{$candidate_id}/attachments", array(
+			'filename'     => 'skillsaw_assessment.pdf',
+			'type'         => 'other',
+			'content_type' => 'application/pdf',
+			'content'      => base64_encode( $pdf ),
+		) );
+
+		if ( is_wp_error( $pdf_result ) ) {
+			error_log( 'Skillsaw: Greenhouse PDF attach failed — ' . $pdf_result->get_error_message() );
+			if ( ! $note_error ) {
+				$note_error = 'PDF attach: ' . $pdf_result->get_error_message();
+			}
+		}
+
 		// Return array so the evaluator can store both IDs and any note error.
 		return array(
 			'candidate_id'   => $candidate_id,
@@ -130,6 +146,140 @@ class Skillsaw_Greenhouse {
 		}
 
 		return implode( "\n", $lines );
+	}
+
+	/**
+	 * Generate a minimal but valid PDF containing the assessment report.
+	 * Uses built-in Type1 fonts (Courier/Courier-Bold) — no external libraries.
+	 */
+	private function build_pdf( array $session, array $skill_ratings, array $transcript ) {
+		// ── Collect lines ─────────────────────────────────────────────────────
+		// Courier 10pt: each char = 6pt. Content width = 612 - 2*72 = 468pt → 78 chars/line.
+		$lines = array(); // each item: [ 'text' => string, 'bold' => bool ]
+
+		$add = function( $text, $bold = false ) use ( &$lines ) {
+			if ( $text === '' ) { $lines[] = array( 'text' => '', 'bold' => false ); return; }
+			foreach ( explode( "\n", wordwrap( (string) $text, 78, "\n", true ) ) as $l ) {
+				$lines[] = array( 'text' => $l, 'bold' => $bold );
+			}
+		};
+
+		$label_map = array(
+			'obvious_success'   => 'Clearly demonstrated',
+			'provided_response' => 'Demonstrated',
+			'no_response'       => 'Not demonstrated',
+			'obvious_failure'   => 'Below threshold',
+		);
+
+		$add( 'SKILLSAW ASSESSMENT REPORT', true );
+		$add( str_repeat( '-', 40 ) );
+		$add( '' );
+		$add( 'Role:      ' . ( $session['role_title'] ?? '' ) );
+		$add( 'Candidate: ' . ( $session['candidate_name'] ?? '' ) );
+		$add( 'Email:     ' . ( $session['candidate_email'] ?? '' ) );
+		$add( 'Mode:      ' . ucfirst( $session['mode'] ?? '' ) );
+		$add( 'Date:      ' . ( $session['completed_at'] ?: $session['started_at'] ?? '' ) );
+		$add( '' );
+
+		if ( ! empty( $skill_ratings ) ) {
+			$add( 'SKILL RATINGS', true );
+			$add( str_repeat( '-', 40 ) );
+			foreach ( $skill_ratings as $r ) {
+				$add( ( $r['skill_name'] ?? '' ) . ': ' . ( $label_map[ $r['rating'] ] ?? $r['rating'] ) );
+			}
+			$add( '' );
+		}
+
+		if ( ! empty( $transcript ) ) {
+			$add( 'CHAT TRANSCRIPT', true );
+			$add( str_repeat( '-', 40 ) );
+			foreach ( $transcript as $msg ) {
+				$speaker = $msg['role'] === 'bot' ? 'Interviewer' : 'Candidate';
+				$add( $speaker . ':', true );
+				$add( $msg['content'] );
+				$add( '' );
+			}
+		}
+
+		// ── PDF layout constants ──────────────────────────────────────────────
+		$pw      = 612; $ph = 792; // Letter
+		$margin  = 72;  // 1 inch
+		$fs      = 10;  // font size pt
+		$lh      = 14;  // line height pt
+		$lpp     = (int) floor( ( $ph - 2 * $margin ) / $lh ); // lines per page
+
+		$pages   = array_chunk( $lines, $lpp ) ?: array( array() );
+		$np      = count( $pages );
+
+		// Object numbering:
+		//  1 = catalog, 2 = pages,
+		//  3…2+np = page dicts, 3+np…2+2np = content streams,
+		//  3+2np = Courier, 4+2np = Courier-Bold
+		$fn_reg  = 3 + 2 * $np;
+		$fn_bold = 4 + 2 * $np;
+
+		// ── Build content streams ─────────────────────────────────────────────
+		$esc = function( $s ) {
+			return str_replace( array( '\\', '(', ')' ), array( '\\\\', '\\(', '\\)' ), $s );
+		};
+
+		$streams = array();
+		foreach ( $pages as $pg ) {
+			$s        = "BT\n/F1 {$fs} Tf\n{$margin} " . ( $ph - $margin ) . " Td\n";
+			$cur_bold = false;
+			foreach ( $pg as $item ) {
+				if ( $item['bold'] !== $cur_bold ) {
+					$fn       = $item['bold'] ? '/F2' : '/F1';
+					$s       .= "{$fn} {$fs} Tf\n";
+					$cur_bold = $item['bold'];
+				}
+				$s .= '(' . $esc( $item['text'] ) . ") Tj\n0 -{$lh} Td\n";
+			}
+			$streams[] = $s . "ET\n";
+		}
+
+		// ── Assemble PDF objects ──────────────────────────────────────────────
+		$page_refs = implode( ' ', array_map( fn( $i ) => ( 3 + $i ) . ' 0 R', range( 0, $np - 1 ) ) );
+
+		$obj_bodies = array();
+		$obj_bodies[] = "<</Type /Catalog /Pages 2 0 R>>";
+		$obj_bodies[] = "<</Type /Pages /Kids [{$page_refs}] /Count {$np}>>";
+
+		for ( $i = 0; $i < $np; $i++ ) {
+			$cs = ( 3 + $np + $i );
+			$obj_bodies[] = "<</Type /Page /Parent 2 0 R /MediaBox [0 0 {$pw} {$ph}] "
+				. "/Contents {$cs} 0 R /Resources <</Font <</F1 {$fn_reg} 0 R /F2 {$fn_bold} 0 R>>>>>>";
+		}
+
+		foreach ( $streams as $s ) {
+			$len          = strlen( $s );
+			$obj_bodies[] = "<</Length {$len}>>\nstream\n{$s}endstream";
+		}
+
+		$obj_bodies[] = "<</Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding>>";
+		$obj_bodies[] = "<</Type /Font /Subtype /Type1 /BaseFont /Courier-Bold /Encoding /WinAnsiEncoding>>";
+
+		// ── Write bytes ───────────────────────────────────────────────────────
+		$pdf     = "%PDF-1.4\n";
+		$offsets = array();
+
+		foreach ( $obj_bodies as $i => $body ) {
+			$offsets[] = strlen( $pdf );
+			$pdf      .= ( $i + 1 ) . " 0 obj\n{$body}\nendobj\n";
+		}
+
+		$xref_pos = strlen( $pdf );
+		$total    = count( $obj_bodies );
+		$pdf     .= "xref\n0 " . ( $total + 1 ) . "\n";
+		$pdf     .= "0000000000 65535 f \n";
+		foreach ( $offsets as $off ) {
+			$pdf .= sprintf( "%010d 00000 n \n", $off );
+		}
+
+		$pdf .= "trailer\n<</Size " . ( $total + 1 ) . " /Root 1 0 R>>\n";
+		$pdf .= "startxref\n{$xref_pos}\n%%EOF\n";
+
+		return $pdf;
 	}
 
 	private function fetch_transcript( $session_id ) {

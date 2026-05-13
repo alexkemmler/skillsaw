@@ -504,6 +504,19 @@ export default function RolesTab() {
 			</div>
 
 			<div className="skillsaw-roles-list">
+				{ filtered.length > 0 && (
+					<div className="skillsaw-list-head skillsaw-roles-list-head" aria-hidden="true">
+						<span />
+						<span>Role</span>
+						<span>Team</span>
+						<span>Division</span>
+						<span>Status</span>
+						<span>Bot</span>
+						<span>Apps</span>
+						<span>Embed</span>
+						<span />
+					</div>
+				) }
 				{ filtered.length === 0 && (
 					<p className="skillsaw-empty">No roles yet. Add one above.</p>
 				) }

@@ -7,6 +7,9 @@ class Skillsaw_Activator {
 
 	public static function activate() {
 		self::create_tables();
+		if ( ! wp_next_scheduled( 'skillsaw_expire_sessions' ) ) {
+			wp_schedule_event( time(), 'hourly', 'skillsaw_expire_sessions' );
+		}
 	}
 
 	private static function create_tables() {

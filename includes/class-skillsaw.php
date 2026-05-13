@@ -41,6 +41,11 @@ class Skillsaw {
 			$evaluator = new Skillsaw_Evaluator();
 			$evaluator->evaluate_session( $session_id );
 		} );
+
+		add_action( 'skillsaw_expire_sessions', function () {
+			$sessions = new Skillsaw_Sessions();
+			$sessions->expire_old_sessions();
+		} );
 	}
 
 	// -------------------------------------------------------------------------

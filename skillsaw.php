@@ -22,6 +22,9 @@ require_once SKILLSAW_PLUGIN_DIR . 'includes/class-activator.php';
 require_once SKILLSAW_PLUGIN_DIR . 'includes/class-skillsaw.php';
 
 register_activation_hook( __FILE__, array( 'Skillsaw_Activator', 'activate' ) );
+register_deactivation_hook( __FILE__, function () {
+	wp_clear_scheduled_hook( 'skillsaw_expire_sessions' );
+} );
 
 add_action( 'plugins_loaded', function () {
 	if ( get_option( 'skillsaw_db_version' ) !== SKILLSAW_VERSION ) {

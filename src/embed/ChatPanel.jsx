@@ -8,7 +8,12 @@ async function apiFetch( url, options, nonce ) {
 	const headers = { 'X-WP-Nonce': nonce, ...( options.headers || {} ) };
 	const res = await fetch( url, { ...options, headers, signal: AbortSignal.timeout( API_TIMEOUT ) } );
 	const data = await res.json();
-	if ( ! res.ok ) throw new Error( data?.message || 'Request failed.' );
+	if ( ! res.ok ) {
+		const err = new Error( data?.message || 'Request failed.' );
+		err.code   = data?.code;
+		err.status = res.status;
+		throw err;
+	}
 	return data;
 }
 
@@ -239,7 +244,7 @@ function OpeningMessage( { roleTitle, roleSkills, hasCritique, onChoose, disable
 export default function ChatPanel( { roleId, active, hasCritique, roleTitle, roleSkills, nonce, rootUrl } ) {
 	const base = rootUrl.replace( /\/$/, '' ) + '/skillsaw/v1';
 
-	// phase: 'idle' | 'starting' | 'chatting' | 'complete' | 'error'
+	// phase: 'idle' | 'starting' | 'chatting' | 'complete' | 'expired' | 'error'
 	const [ phase,        setPhase        ] = useState( 'idle' );
 	const [ mode,         setMode         ] = useState( null );
 	const [ sessionToken, setSessionToken ] = useState( null );
@@ -365,10 +370,14 @@ export default function ChatPanel( { roleId, active, hasCritique, roleTitle, rol
 			);
 			setMessages( ( prev ) => [ ...prev, { type: 'text', role: 'bot', content: data.message } ] );
 		} catch ( err ) {
-			setMessages( ( prev ) => [
-				...prev,
-				{ type: 'text', role: 'bot', content: `Sorry, something went wrong: ${ err.message }` },
-			] );
+			if ( err.code === 'session_expired' ) {
+				setPhase( 'expired' );
+			} else {
+				setMessages( ( prev ) => [
+					...prev,
+					{ type: 'text', role: 'bot', content: `Sorry, something went wrong: ${ err.message }` },
+				] );
+			}
 		}
 
 		setIsSending( false );
@@ -402,10 +411,14 @@ export default function ChatPanel( { roleId, active, hasCritique, roleTitle, rol
 			// send a follow-up message once the user confirms.
 			setPendingSkillPicker( { messageId: data.message_id } );
 		} catch ( err ) {
-			setMessages( ( prev ) => [
-				...prev,
-				{ type: 'text', role: 'bot', content: `File upload failed: ${ err.message }` },
-			] );
+			if ( err.code === 'session_expired' ) {
+				setPhase( 'expired' );
+			} else {
+				setMessages( ( prev ) => [
+					...prev,
+					{ type: 'text', role: 'bot', content: `File upload failed: ${ err.message }` },
+				] );
+			}
 		}
 
 		setIsUploading( false );
@@ -570,6 +583,20 @@ export default function ChatPanel( { roleId, active, hasCritique, roleTitle, rol
 				<div className="sw-full-state">
 					<div className="sw-spinner" />
 					<p>Starting your session…</p>
+				</div>
+			</section>
+		);
+	}
+
+	if ( phase === 'expired' ) {
+		return (
+			<section className="skillsaw-chat-panel" aria-label="Skillsaw conversation">
+				<div className="sw-full-state">
+					<p className="sw-expired-msg">Your session has expired.</p>
+					<p className="sw-expired-sub">Sessions are valid for 4 hours. Please refresh the page to start a new one.</p>
+					<button className="sw-action-btn" onClick={ () => window.location.reload() }>
+						Start over
+					</button>
 				</div>
 			</section>
 		);

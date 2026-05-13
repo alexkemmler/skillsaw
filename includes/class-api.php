@@ -598,8 +598,18 @@ class Skillsaw_API {
 			return new WP_Error( 'not_found', 'Session not found.', array( 'status' => 404 ) );
 		}
 
+		if ( $session['status'] === 'expired' ) {
+			return new WP_Error( 'session_expired', 'This session has expired.', array( 'status' => 410 ) );
+		}
+
 		if ( $session['status'] !== 'in_progress' ) {
 			return new WP_Error( 'session_closed', 'Session is no longer active.', array( 'status' => 400 ) );
+		}
+
+		// Lazy expiry: mark as expired if session is more than 4 hours old.
+		if ( time() - strtotime( $session['started_at'] ) > 4 * HOUR_IN_SECONDS ) {
+			$sessions->expire_session( $session['id'] );
+			return new WP_Error( 'session_expired', 'This session has expired.', array( 'status' => 410 ) );
 		}
 
 		$content = sanitize_textarea_field( $request->get_param( 'message' ) ?? '' );
@@ -651,8 +661,17 @@ class Skillsaw_API {
 			return new WP_Error( 'not_found', 'Session not found.', array( 'status' => 404 ) );
 		}
 
+		if ( $session['status'] === 'expired' ) {
+			return new WP_Error( 'session_expired', 'This session has expired.', array( 'status' => 410 ) );
+		}
+
 		if ( $session['status'] !== 'in_progress' ) {
 			return new WP_Error( 'session_closed', 'Session is no longer active.', array( 'status' => 400 ) );
+		}
+
+		if ( time() - strtotime( $session['started_at'] ) > 4 * HOUR_IN_SECONDS ) {
+			$sessions->expire_session( $session['id'] );
+			return new WP_Error( 'session_expired', 'This session has expired.', array( 'status' => 410 ) );
 		}
 
 		if ( empty( $_FILES['file'] ) ) {

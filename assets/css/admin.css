@@ -116,6 +116,28 @@
 .skillsaw-toggle--on .skillsaw-toggle-thumb::after { left: 16px; }
 
 /* ── Roles list ─────────────────────────────────────────────────────────── */
+.skillsaw-list-head {
+	display: grid;
+	gap: 12px;
+	align-items: center;
+	padding: 7px 16px;
+	background: #f6f7f7;
+	border-bottom: 1px solid #dcdcde;
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: #757575;
+}
+
+.skillsaw-roles-list-head {
+	grid-template-columns: 24px 1fr 120px 140px 120px 130px 60px 110px 70px;
+}
+
+.skillsaw-candidates-list-head {
+	grid-template-columns: 220px 180px 1fr 100px 90px 120px;
+}
+
 .skillsaw-roles-list { border: 1px solid #dcdcde; border-radius: 3px; }
 .skillsaw-role-row { border-bottom: 1px solid #dcdcde; }
 .skillsaw-role-row:last-child { border-bottom: none; }
@@ -228,7 +250,7 @@
 .skillsaw-candidates-list { border: 1px solid #dcdcde; border-radius: 3px; }
 .skillsaw-candidate-row {
 	display: grid;
-	grid-template-columns: 220px 180px 1fr 140px;
+	grid-template-columns: 220px 180px 1fr 100px 90px 120px;
 	gap: 16px;
 	align-items: center;
 	padding: 12px 16px;
@@ -321,15 +343,18 @@
 	color: #2271b1;
 }
 
-/* ── Candidate meta (date + duration + mode) ─────────────────────────────── */
-.skillsaw-candidate-meta {
+.skillsaw-candidate-date,
+.skillsaw-candidate-duration {
+	font-size: 13px;
+	color: #50575e;
 	display: flex;
 	flex-direction: column;
-	gap: 5px;
-	font-size: 12px;
-	color: #8c8f94;
-	margin-top: 6px;
-	line-height: 1.4;
+	gap: 4px;
+	align-self: center;
+}
+
+.skillsaw-candidate-actions {
+	align-self: center;
 }
 
 /* ── File card (enhanced) ───────────────────────────────────────────────── */

@@ -143,6 +143,32 @@ class Skillsaw_Sessions {
 	}
 
 	/**
+	 * Mark a single session as expired.
+	 */
+	public function expire_session( $session_id ) {
+		global $wpdb;
+		$wpdb->update(
+			"{$wpdb->prefix}skillsaw_sessions",
+			array( 'status' => 'expired' ),
+			array( 'id' => $session_id )
+		);
+	}
+
+	/**
+	 * Bulk-expire sessions that have been in_progress for more than 4 hours.
+	 * Called by the hourly cron job.
+	 */
+	public function expire_old_sessions() {
+		global $wpdb;
+		$wpdb->query(
+			"UPDATE {$wpdb->prefix}skillsaw_sessions
+			 SET status = 'expired'
+			 WHERE status = 'in_progress'
+			 AND started_at < DATE_SUB( NOW(), INTERVAL 4 HOUR )"
+		);
+	}
+
+	/**
 	 * Mark a session complete and record the candidate's name and email.
 	 */
 	public function complete_session( $session_id, $name, $email ) {

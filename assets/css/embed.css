@@ -787,3 +787,89 @@
   z-index: 10;
   pointer-events: none;
 }
+
+/* ============================================================
+   Expired session state
+   ============================================================ */
+
+.sw-expired-msg {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--c-ink);
+  margin: 0;
+}
+
+.sw-expired-sub {
+  font-size: 13.5px;
+  color: var(--c-ink-soft);
+  margin: 0;
+  max-width: 300px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* ============================================================
+   Mobile responsive (≤ 600px)
+   ============================================================ */
+
+@media (max-width: 600px) {
+  .skillsaw-chat-panel {
+    margin: 0;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  .sw-msg-list {
+    max-height: 52svh;
+  }
+
+  .sw-bubble--bot,
+  .sw-bubble--user {
+    max-width: 90%;
+  }
+
+  .sw-chat-header {
+    padding: 10px 14px;
+  }
+
+  .sw-composer {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .sw-composer-input {
+    font-size: 16px; /* prevents iOS zoom on focus */
+    min-height: 44px;
+  }
+
+  .sw-send-btn {
+    padding: 10px 14px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .sw-attach-btn {
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .sw-action-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .sw-actions {
+    flex-direction: column;
+  }
+
+  .sw-doc-card-actions {
+    flex-direction: column;
+  }
+
+  .sw-doc-action-btn {
+    width: 100%;
+    text-align: center;
+  }
+}

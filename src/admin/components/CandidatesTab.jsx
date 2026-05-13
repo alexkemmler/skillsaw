@@ -185,6 +185,19 @@ function CandidateRow( { session, onOpenTranscript } ) {
 				) }
 			</div>
 
+			<div className="skillsaw-candidate-date">
+				{ date || '—' }
+			</div>
+
+			<div className="skillsaw-candidate-duration">
+				{ duration || '—' }
+				{ session.mode && (
+					<span className="skillsaw-pill skillsaw-pill--mode">
+						{ session.mode === 'upload' ? 'Upload' : 'Critique' }
+					</span>
+				) }
+			</div>
+
 			<div className="skillsaw-candidate-actions">
 				<Button
 					variant="primary"
@@ -193,15 +206,6 @@ function CandidateRow( { session, onOpenTranscript } ) {
 				>
 					Transcript
 				</Button>
-				<div className="skillsaw-candidate-meta">
-					{ date && <span>{ date }</span> }
-					{ duration && <span>{ duration }</span> }
-					{ session.mode && (
-						<span className="skillsaw-pill skillsaw-pill--mode">
-							{ session.mode === 'upload' ? 'Upload' : 'Critique' }
-						</span>
-					) }
-				</div>
 			</div>
 		</div>
 	);
@@ -296,6 +300,16 @@ export default function CandidatesTab() {
 			</div>
 
 			<div className="skillsaw-candidates-list">
+				{ filtered.length > 0 && (
+					<div className="skillsaw-list-head skillsaw-candidates-list-head" aria-hidden="true">
+						<span>Candidate</span>
+						<span>Role</span>
+						<span>Skills evaluation</span>
+						<span>Date</span>
+						<span>Time taken</span>
+						<span>Transcript</span>
+					</div>
+				) }
 				{ filtered.length === 0 && (
 					<p className="skillsaw-empty">
 						{ sessions.length === 0

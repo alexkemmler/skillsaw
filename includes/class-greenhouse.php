@@ -30,6 +30,10 @@ class Skillsaw_Greenhouse {
 			return new WP_Error( 'no_api_key', 'Greenhouse API key not configured.' );
 		}
 
+		if ( ! $this->on_behalf_of ) {
+			return new WP_Error( 'no_user_id', 'Greenhouse User ID is required to post notes. Please add it in Skillsaw Settings.' );
+		}
+
 		list( $first, $last ) = $this->split_name( $session['candidate_name'] );
 
 		$candidate_payload = array(
@@ -40,7 +44,8 @@ class Skillsaw_Greenhouse {
 			),
 		);
 
-		if ( ! empty( $role['greenhouse_job_id'] ) ) {
+		$has_job = ! empty( $role['greenhouse_job_id'] );
+		if ( $has_job ) {
 			$candidate_payload['applications'] = array(
 				array( 'job_id' => (int) $role['greenhouse_job_id'] ),
 			);
@@ -56,11 +61,26 @@ class Skillsaw_Greenhouse {
 			return new WP_Error( 'no_candidate_id', 'Greenhouse did not return a candidate ID.' );
 		}
 
-		$note = $this->build_note( $session, $skill_ratings );
-		$this->request( 'POST', "/candidates/{$candidate_id}/activity_feed/notes", array(
-			'body'       => $note,
-			'visibility' => 'private',
-		) );
+		$transcript  = $this->fetch_transcript( $session['id'] );
+		$note        = $this->build_note( $session, $skill_ratings, $transcript );
+		$note_payload = array( 'body' => $note, 'visibility' => 'private' );
+
+		// Post to the application activity feed if we linked a job — that's
+		// where the hiring team looks. Fall back to candidate feed otherwise.
+		$application_id = null;
+		if ( $has_job && ! empty( $response['applications'] ) ) {
+			$application_id = $response['applications'][0]['id'] ?? null;
+		}
+
+		if ( $application_id ) {
+			$note_result = $this->request( 'POST', "/applications/{$application_id}/activity_feed/notes", $note_payload );
+		} else {
+			$note_result = $this->request( 'POST', "/candidates/{$candidate_id}/activity_feed/notes", $note_payload );
+		}
+
+		if ( is_wp_error( $note_result ) ) {
+			error_log( 'Skillsaw: Greenhouse note failed — ' . $note_result->get_error_message() );
+		}
 
 		return $candidate_id;
 	}
@@ -69,7 +89,7 @@ class Skillsaw_Greenhouse {
 	// Helpers
 	// -------------------------------------------------------------------------
 
-	private function build_note( array $session, array $skill_ratings ) {
+	private function build_note( array $session, array $skill_ratings, array $transcript = array() ) {
 		$label_map = array(
 			'obvious_success'   => 'Clearly demonstrated ✓✓',
 			'provided_response' => 'Demonstrated ✓',
@@ -78,19 +98,42 @@ class Skillsaw_Greenhouse {
 		);
 
 		$lines   = array();
-		$lines[] = 'Skillsaw Assessment — ' . ( $session['role_title'] ?? '' );
+		$lines[] = '=== Skillsaw Assessment ===';
+		$lines[] = 'Role: ' . ( $session['role_title'] ?? '' );
 		$lines[] = 'Mode: ' . ucfirst( $session['mode'] ?? '' );
 		$lines[] = '';
 
 		if ( ! empty( $skill_ratings ) ) {
-			$lines[] = 'Skill Ratings:';
+			$lines[] = '--- Skill Ratings ---';
 			foreach ( $skill_ratings as $r ) {
 				$label   = $label_map[ $r['rating'] ] ?? $r['rating'];
-				$lines[] = '  ' . $r['skill_name'] . ': ' . $label;
+				$lines[] = $r['skill_name'] . ': ' . $label;
+			}
+			$lines[] = '';
+		}
+
+		if ( ! empty( $transcript ) ) {
+			$lines[] = '--- Chat Transcript ---';
+			foreach ( $transcript as $msg ) {
+				$speaker = $msg['role'] === 'bot' ? 'Interviewer' : 'Candidate';
+				$lines[] = $speaker . ': ' . $msg['content'];
+				$lines[] = '';
 			}
 		}
 
 		return implode( "\n", $lines );
+	}
+
+	private function fetch_transcript( $session_id ) {
+		global $wpdb;
+		return $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT role, content FROM {$wpdb->prefix}skillsaw_messages
+				 WHERE session_id = %d ORDER BY created_at ASC",
+				$session_id
+			),
+			ARRAY_A
+		) ?: array();
 	}
 
 	private function split_name( $full_name ) {

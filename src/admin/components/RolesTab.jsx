@@ -30,10 +30,12 @@ function SkillChips( { skills, onRemove } ) {
 }
 
 function StatusToggle( { role, onChange } ) {
-	if ( ! role.botConfigured || role.status === 'draft' ) {
+	// Show a static pill only while the role has no skills configured yet.
+	if ( ! role.botConfigured ) {
 		return <span className="skillsaw-pill skillsaw-pill--draft">Draft</span>;
 	}
 
+	// Once configured, show the toggle — treat 'draft' the same as 'inactive'.
 	const active = role.status === 'active';
 
 	return (
@@ -76,8 +78,9 @@ function CopyEmbedButton( { role } ) {
 }
 
 function DocumentRow( { doc, role, onCritiqueGenerated, onDelete } ) {
-	const [ generating, setGenerating ] = useState( false );
-	const [ error, setError ] = useState( '' );
+	const [ generating,      setGenerating      ] = useState( false );
+	const [ error,           setError           ] = useState( '' );
+	const [ critiqueExpanded, setCritiqueExpanded ] = useState( false );
 
 	const handleGenerateCritique = async () => {
 		setGenerating( true );
@@ -102,6 +105,16 @@ function DocumentRow( { doc, role, onCritiqueGenerated, onDelete } ) {
 				<span className="skillsaw-doc-name">{ doc.name }</span>
 				<SkillChips skills={ doc.skills } />
 				<div className="skillsaw-doc-actions">
+					{ doc.url && (
+						<a
+							href={ doc.url }
+							target="_blank"
+							rel="noreferrer"
+							className="skillsaw-doc-view-link"
+						>
+							View ↗
+						</a>
+					) }
 					{ ! doc.critique && (
 						<Button
 							variant="secondary"
@@ -124,11 +137,30 @@ function DocumentRow( { doc, role, onCritiqueGenerated, onDelete } ) {
 			</div>
 			{ error && <p className="skillsaw-error">{ error }</p> }
 			{ doc.critique && (
-				<div className="skillsaw-doc-row skillsaw-doc-row--critique">
-					<span className="skillsaw-pill skillsaw-pill--critique">Critique</span>
-					<span className="skillsaw-doc-name">{ doc.critique.name }</span>
-					<SkillChips skills={ doc.critique.skills } />
-				</div>
+				<>
+					<div className="skillsaw-doc-row skillsaw-doc-row--critique">
+						<span className="skillsaw-pill skillsaw-pill--critique">Critique</span>
+						<span className="skillsaw-doc-name">{ doc.critique.name }</span>
+						<SkillChips skills={ doc.critique.skills } />
+						<div className="skillsaw-doc-actions">
+							<Button
+								variant="tertiary"
+								size="small"
+								onClick={ () => setCritiqueExpanded( ( v ) => ! v ) }
+							>
+								{ critiqueExpanded ? 'Hide' : 'View critique' }
+							</Button>
+						</div>
+					</div>
+					{ critiqueExpanded && (
+						<div className="skillsaw-critique-preview">
+							{ doc.critique.critique_text
+								? <pre className="skillsaw-critique-text">{ doc.critique.critique_text }</pre>
+								: <p className="skillsaw-error">Critique text not available.</p>
+							}
+						</div>
+					) }
+				</>
 			) }
 		</>
 	);
@@ -136,13 +168,14 @@ function DocumentRow( { doc, role, onCritiqueGenerated, onDelete } ) {
 
 function RoleConfig( { role, onSave, onClose } ) {
 	const [ form, setForm ] = useState( {
-		title:        role.title,
-		division:     role.division,
-		team:         role.team,
-		status:       role.status,
-		instructions: role.instructions,
-		skills:       [ ...( role.skills || [] ) ],
-		documents:    [ ...( role.documents || [] ) ],
+		title:             role.title,
+		division:          role.division,
+		team:              role.team,
+		candidate_note:    role.candidate_note || '',
+		instructions:      role.instructions,
+		greenhouse_job_id: role.greenhouse_job_id || '',
+		skills:            [ ...( role.skills || [] ) ],
+		documents:         [ ...( role.documents || [] ) ],
 	} );
 	const [ newSkill, setNewSkill ] = useState( '' );
 	const [ saving, setSaving ]     = useState( false );
@@ -171,12 +204,14 @@ function RoleConfig( { role, onSave, onClose } ) {
 				path:   `/skillsaw/v1/roles/${ role.id }`,
 				method: 'PUT',
 				data:   {
-					title:        form.title,
-					division:     form.division,
-					team:         form.team,
-					status:       form.status,
-					instructions: form.instructions,
-					skills:       form.skills,
+					title:             form.title,
+					division:          form.division,
+					team:              form.team,
+					status:            form.skills.length > 0 && role.status === 'draft' ? 'active' : undefined,
+					candidate_note:    form.candidate_note,
+					instructions:      form.instructions,
+					greenhouse_job_id: form.greenhouse_job_id,
+					skills:            form.skills,
 				},
 			} );
 			onSave( updated );
@@ -250,7 +285,13 @@ function RoleConfig( { role, onSave, onClose } ) {
 					<TextControl label="Division" value={ form.division } onChange={ set( 'division' ) } />
 					<TextControl label="Team" value={ form.team } onChange={ set( 'team' ) } />
 				</div>
-				<SelectControl label="Status" value={ form.status } options={ STATUS_OPTIONS } onChange={ set( 'status' ) } />
+				<TextControl
+					label="Greenhouse Job ID"
+					value={ form.greenhouse_job_id }
+					onChange={ set( 'greenhouse_job_id' ) }
+					placeholder="e.g. 4567890"
+					help="Numeric job ID from Greenhouse. Candidates will be linked to this job when their session is evaluated."
+				/>
 			</div>
 
 			<div className="skillsaw-config-section">
@@ -295,13 +336,24 @@ function RoleConfig( { role, onSave, onClose } ) {
 			</div>
 
 			<div className="skillsaw-config-section">
+				<h4>Note to the candidate</h4>
+				<TextareaControl
+					label=""
+					value={ form.candidate_note }
+					onChange={ set( 'candidate_note' ) }
+					placeholder="Shown to the candidate in the chat alongside the critique document — e.g. 'Focus on the strategic recommendations in section 2.'"
+					rows={ 4 }
+				/>
+			</div>
+
+			<div className="skillsaw-config-section">
 				<h4>Additional instructions</h4>
 				<TextareaControl
 					label=""
 					value={ form.instructions }
 					onChange={ set( 'instructions' ) }
-					placeholder="Any extra guidance for the bot — e.g. 'Push back if the candidate hand-waves testing strategy.'"
-					rows={ 6 }
+					placeholder="Private guidance for the bot — never shown to the candidate. E.g. 'Push back if the candidate hand-waves testing strategy.'"
+					rows={ 4 }
 				/>
 			</div>
 

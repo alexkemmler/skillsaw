@@ -87,7 +87,7 @@ class Skillsaw_Admin {
 		}
 		check_admin_referer( 'skillsaw_settings' );
 
-		$fields = array( 'anthropic_key', 'greenhouse_key', 'greenhouse_board_token' );
+		$fields = array( 'anthropic_key', 'greenhouse_key', 'greenhouse_board_token', 'greenhouse_user_id' );
 		foreach ( $fields as $field ) {
 			if ( isset( $_POST[ $field ] ) ) {
 				Skillsaw_Settings::set( $field, sanitize_text_field( wp_unslash( $_POST[ $field ] ) ) );

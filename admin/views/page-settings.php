@@ -58,6 +58,21 @@
 					<p class="description">Your Greenhouse job board token (e.g. <code>automattic</code>). Found in Greenhouse under Dev Center.</p>
 				</td>
 			</tr>
+			<tr>
+				<th scope="row">
+					<label for="greenhouse_user_id">Greenhouse User ID</label>
+				</th>
+				<td>
+					<input
+						type="text"
+						id="greenhouse_user_id"
+						name="greenhouse_user_id"
+						value="<?php echo esc_attr( Skillsaw_Settings::get_greenhouse_user_id() ); ?>"
+						class="regular-text"
+					>
+					<p class="description">Greenhouse user ID to attribute activity notes to (numeric). Found in your Greenhouse profile URL.</p>
+				</td>
+			</tr>
 		</table>
 
 		<?php submit_button( 'Save Settings' ); ?>

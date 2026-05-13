@@ -127,7 +127,18 @@ function SkillPickerMessage( { roleSkills, onConfirm } ) {
 // ─── Document critique card ───────────────────────────────────────────────────
 
 function CritiqueDocCard( { docName, critiqueText, instructions } ) {
-	const excerpt = critiqueText ? critiqueText.slice( 0, 320 ) + ( critiqueText.length > 320 ? '…' : '' ) : '';
+	const [ expanded, setExpanded ] = useState( false );
+
+	const handleDownload = () => {
+		const blob = new Blob( [ critiqueText ], { type: 'text/plain' } );
+		const url  = URL.createObjectURL( blob );
+		const a    = document.createElement( 'a' );
+		a.href     = url;
+		a.download = ( docName || 'document' ) + '.txt';
+		a.click();
+		URL.revokeObjectURL( url );
+	};
+
 	return (
 		<MsgRow who="bot">
 			<div className="sw-bubble sw-bubble--bot" style={ { maxWidth: '82%' } }>
@@ -137,9 +148,31 @@ function CritiqueDocCard( { docName, critiqueText, instructions } ) {
 						<PdfIcon large />
 						<div className="sw-doc-meta">
 							<p className="sw-doc-title">{ docName }</p>
-							<p className="sw-doc-excerpt">{ excerpt }</p>
 						</div>
 					</div>
+					<div className="sw-doc-card-actions">
+						<button
+							type="button"
+							className="sw-doc-action-btn"
+							onClick={ () => setExpanded( ( v ) => ! v ) }
+						>
+							{ expanded ? 'Collapse' : 'Read document' }
+						</button>
+						{ critiqueText && (
+							<button
+								type="button"
+								className="sw-doc-action-btn"
+								onClick={ handleDownload }
+							>
+								Download .txt
+							</button>
+						) }
+					</div>
+					{ expanded && critiqueText && (
+						<div className="sw-doc-full-text">
+							<pre>{ critiqueText }</pre>
+						</div>
+					) }
 					{ instructions && (
 						<div className="sw-manager-note">
 							<span className="sw-manager-note-label">A note from the hiring manager</span>
@@ -203,7 +236,7 @@ function OpeningMessage( { roleTitle, roleSkills, hasCritique, onChoose, disable
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function ChatPanel( { roleId, hasCritique, roleTitle, roleSkills, nonce, rootUrl } ) {
+export default function ChatPanel( { roleId, active, hasCritique, roleTitle, roleSkills, nonce, rootUrl } ) {
 	const base = rootUrl.replace( /\/$/, '' ) + '/skillsaw/v1';
 
 	// phase: 'idle' | 'starting' | 'chatting' | 'complete' | 'error'
@@ -299,7 +332,7 @@ export default function ChatPanel( { roleId, hasCritique, roleTitle, roleSkills,
 					type:         'critique_doc',
 					docName:      data.critique_doc_name,
 					critiqueText: data.critique_text,
-					instructions: data.critique_instructions,
+					instructions: data.candidate_note,
 				} ] );
 			}
 
@@ -447,7 +480,7 @@ export default function ChatPanel( { roleId, hasCritique, roleTitle, roleSkills,
 
 	const { getRootProps, getInputProps, isDragActive } = useDropzone( {
 		onDrop:     ( files ) => { if ( files[ 0 ] ) uploadFile( files[ 0 ] ); },
-		accept:     { 'application/pdf': [ '.pdf' ], 'text/plain': [ '.txt' ], 'text/markdown': [ '.md' ] },
+		accept:     { 'application/pdf': [ '.pdf' ], 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': [ '.docx' ], 'text/plain': [ '.txt' ], 'text/markdown': [ '.md' ] },
 		maxSize:    25 * 1024 * 1024,
 		multiple:   false,
 		noClick:    true,
@@ -517,6 +550,18 @@ export default function ChatPanel( { roleId, hasCritique, roleTitle, roleSkills,
 	const showUploadBtn    = phase === 'chatting' && mode === 'upload';
 	const canSend          = !! input.trim() && ! composerDisabled;
 
+	// ── Inactive role ─────────────────────────────────────────────────────────
+
+	if ( ! active ) {
+		return (
+			<section className="skillsaw-chat-panel skillsaw-chat-panel--inactive" aria-label="Skillsaw conversation">
+				<div className="sw-full-state">
+					<p className="sw-inactive-msg">We are currently not accepting new applications for this role.</p>
+				</div>
+			</section>
+		);
+	}
+
 	// ── Early loading / error renders ─────────────────────────────────────────
 
 	if ( phase === 'starting' ) {
@@ -555,7 +600,7 @@ export default function ChatPanel( { roleId, hasCritique, roleTitle, roleSkills,
 			<input
 				ref={ fileInputRef }
 				type="file"
-				accept=".pdf,.txt,.md"
+				accept=".pdf,.docx,.txt,.md"
 				style={ { display: 'none' } }
 				onChange={ ( e ) => { if ( e.target.files[ 0 ] ) uploadFile( e.target.files[ 0 ] ); e.target.value = ''; } }
 			/>

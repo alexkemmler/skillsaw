@@ -216,6 +216,12 @@ class Skillsaw_API {
 		if ( null !== $request->get_param( 'instructions' ) ) {
 			$data['instructions'] = sanitize_textarea_field( $request->get_param( 'instructions' ) );
 		}
+		if ( null !== $request->get_param( 'candidate_note' ) ) {
+			$data['candidate_note'] = sanitize_textarea_field( $request->get_param( 'candidate_note' ) );
+		}
+		if ( null !== $request->get_param( 'greenhouse_job_id' ) ) {
+			$data['greenhouse_job_id'] = sanitize_text_field( $request->get_param( 'greenhouse_job_id' ) );
+		}
 
 		if ( ! empty( $data ) ) {
 			$wpdb->update( "{$wpdb->prefix}skillsaw_roles", $data, array( 'id' => $request['id'] ) );
@@ -324,20 +330,50 @@ class Skillsaw_API {
 
 		require_once SKILLSAW_PLUGIN_DIR . 'includes/class-claude.php';
 
-		$file_path   = get_attached_file( $doc->attachment_id );
-		$file_content = $this->read_file_as_text( $file_path );
+		$file_path = get_attached_file( $doc->attachment_id );
 
-		if ( ! $file_content ) {
-			return new WP_Error( 'unreadable', 'Could not read document contents.', array( 'status' => 500 ) );
+		if ( ! $file_path || ! file_exists( $file_path ) ) {
+			return new WP_Error( 'unreadable', 'Could not find document file.', array( 'status' => 500 ) );
 		}
 
+		$ext       = strtolower( pathinfo( $file_path, PATHINFO_EXTENSION ) );
 		$skills    = json_decode( $doc->skills, true ) ?: array();
 		$skill_str = implode( ', ', $skills );
 
-		$prompt = "You are helping design a skills evaluation for a hiring process. Below is a document that will be given to candidates applying for the role of \"{$doc->role_title}\". The skills being evaluated are: {$skill_str}.\n\nPlease create a revised version of this document that contains several realistic but non-obvious weaknesses — strategic blind spots, flawed assumptions, missed considerations, or subtle errors — that a strong candidate for this role should be able to identify and critique. The weaknesses should feel like genuine oversights, not obvious mistakes. Return only the revised document text, nothing else.\n\n---\n\n{$file_content}";
+		$instruction = "You are preparing a document to be shared with job candidates as a skills evaluation exercise. Candidates applying for the role of \"{$doc->role_title}\" will be asked to critique this document. The skills being evaluated are: {$skill_str}.\n\nStep 1 — Sanitize: Replace all proprietary or identifying information with realistic but fictional equivalents:\n- Company and product names → generic or fictional alternatives (e.g. \"Acme Corp\", \"Project Phoenix\")\n- Real people's names → fictional names\n- Specific internal metrics, revenue figures, and user counts → plausible but fictional numbers\n- Specific dates → approximate or generic timeframes (e.g. \"Q3 2024\" or \"last year\")\n- Internal codenames, team names, or org-specific jargon → neutral equivalents\n\nStep 2 — Introduce weaknesses: Weave in several realistic but non-obvious weaknesses that a strong candidate should be able to identify — strategic blind spots, flawed assumptions, missed considerations, or subtle errors relevant to the skills being evaluated. The weaknesses should feel like genuine oversights, not obvious mistakes.\n\nPreserve the document's overall structure and tone. Return only the revised document text, nothing else.";
 
-		$claude   = new Skillsaw_Claude();
-		$response = $claude->complete( $prompt, 4096, 'claude-opus-4-7' );
+		$claude = new Skillsaw_Claude();
+
+		if ( $ext === 'pdf' ) {
+			$user_content = array(
+				array(
+					'type'   => 'document',
+					'source' => array(
+						'type'       => 'base64',
+						'media_type' => 'application/pdf',
+						'data'       => base64_encode( file_get_contents( $file_path ) ),
+					),
+				),
+				array( 'type' => 'text', 'text' => $instruction ),
+			);
+			$response = $claude->chat(
+				array( array( 'role' => 'user', 'content' => $user_content ) ),
+				'',
+				4096,
+				'claude-opus-4-7'
+			);
+		} elseif ( $ext === 'docx' ) {
+			$text = $this->extract_docx_text( $file_path );
+			if ( ! $text ) {
+				return new WP_Error( 'unreadable', 'Could not extract text from the DOCX file.', array( 'status' => 500 ) );
+			}
+			$response = $claude->complete( "Document:\n\n{$text}\n\n---\n\n{$instruction}", 4096, 'claude-opus-4-7' );
+		} elseif ( in_array( $ext, array( 'txt', 'md' ), true ) ) {
+			$text     = file_get_contents( $file_path );
+			$response = $claude->complete( "Document:\n\n{$text}\n\n---\n\n{$instruction}", 4096, 'claude-opus-4-7' );
+		} else {
+			return new WP_Error( 'unsupported_type', 'Only PDF, DOCX, TXT, and MD documents can be used to generate a critique.', array( 'status' => 400 ) );
+		}
 
 		if ( is_wp_error( $response ) ) {
 			return $response;
@@ -365,6 +401,7 @@ class Skillsaw_API {
 			'skills'              => $skills,
 			'is_critique_version' => true,
 			'parent_document_id'  => $doc->id,
+			'critique_text'       => $response,
 		) );
 	}
 
@@ -447,11 +484,20 @@ class Skillsaw_API {
 		);
 
 		foreach ( $messages as &$msg ) {
+			if ( $msg['candidate_skills'] ) {
+				$msg['candidate_skills'] = json_decode( $msg['candidate_skills'], true ) ?: array();
+			} else {
+				$msg['candidate_skills'] = array();
+			}
+
 			if ( $msg['attachment_id'] ) {
+				$file_path = get_attached_file( $msg['attachment_id'] );
 				$msg['file'] = array(
-					'name' => basename( get_attached_file( $msg['attachment_id'] ) ),
+					'name' => basename( $file_path ),
 					'url'  => wp_get_attachment_url( $msg['attachment_id'] ),
-					'size' => size_format( filesize( get_attached_file( $msg['attachment_id'] ) ) ),
+					'size' => $file_path && file_exists( $file_path )
+						? size_format( filesize( $file_path ) )
+						: '',
 				);
 			}
 		}
@@ -534,9 +580,9 @@ class Skillsaw_API {
 			if ( ! $critique ) {
 				return new WP_Error( 'no_critique', 'No critique document available for this role.', array( 'status' => 404 ) );
 			}
-			$response['critique_text']         = $critique['text'];
-			$response['critique_doc_name']     = $critique['doc_name'];
-			$response['critique_instructions'] = $role['instructions'];
+			$response['critique_text']     = $critique['text'];
+			$response['critique_doc_name'] = $critique['doc_name'];
+			$response['candidate_note']    = $role['candidate_note'] ?? '';
 		}
 
 		return rest_ensure_response( $response );
@@ -617,10 +663,13 @@ class Skillsaw_API {
 			return new WP_Error( 'file_too_large', 'File exceeds the 25 MB limit.', array( 'status' => 400 ) );
 		}
 
-		$allowed_exts = array( 'pdf', 'txt', 'md' );
+		$allowed_exts = array( 'pdf', 'docx', 'txt', 'md' );
 		$ext          = strtolower( pathinfo( $_FILES['file']['name'], PATHINFO_EXTENSION ) );
+		if ( $ext === 'doc' ) {
+			return new WP_Error( 'invalid_file_type', 'Please save your document as DOCX or PDF and re-upload.', array( 'status' => 400 ) );
+		}
 		if ( ! in_array( $ext, $allowed_exts, true ) ) {
-			return new WP_Error( 'invalid_file_type', 'Only PDF, TXT, and MD files are accepted.', array( 'status' => 400 ) );
+			return new WP_Error( 'invalid_file_type', 'Only PDF, DOCX, TXT, and MD files are accepted.', array( 'status' => 400 ) );
 		}
 
 		require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -727,7 +776,9 @@ class Skillsaw_API {
 
 		foreach ( $docs as &$doc ) {
 			$doc['skills'] = json_decode( $doc['skills'], true ) ?: array();
-			$critique      = $wpdb->get_row(
+			$doc['url']    = $doc['attachment_id'] ? wp_get_attachment_url( $doc['attachment_id'] ) : null;
+
+			$critique = $wpdb->get_row(
 				$wpdb->prepare(
 					"SELECT * FROM {$wpdb->prefix}skillsaw_documents WHERE parent_document_id = %d AND is_critique_version = 1",
 					$doc['id']
@@ -735,7 +786,8 @@ class Skillsaw_API {
 				ARRAY_A
 			);
 			if ( $critique ) {
-				$critique['skills'] = json_decode( $critique['skills'], true ) ?: array();
+				$critique['skills']       = json_decode( $critique['skills'], true ) ?: array();
+				$critique['critique_text'] = $critique['critique_text'] ?? null;
 			}
 			$doc['critique'] = $critique;
 		}
@@ -790,6 +842,13 @@ class Skillsaw_API {
 			);
 		}
 
+		if ( $ext === 'docx' ) {
+			$text = $this->extract_docx_text( $file_path );
+			return $text
+				? "I've uploaded my work sample ({$filename}):\n\n{$text}"
+				: "I've uploaded a work sample ({$filename}).";
+		}
+
 		$text = in_array( $ext, array( 'txt', 'md' ), true ) ? file_get_contents( $file_path ) : '';
 		if ( $text ) {
 			return "I've uploaded my work sample ({$filename}):\n\n{$text}";
@@ -833,6 +892,36 @@ class Skillsaw_API {
 	private function get_critique_text_for_role( $role_id ) {
 		$critique = $this->get_critique_for_role( $role_id );
 		return $critique ? $critique['text'] : null;
+	}
+
+	private function extract_docx_text( $file_path ) {
+		if ( ! class_exists( 'ZipArchive' ) ) {
+			return '';
+		}
+		$zip = new ZipArchive();
+		if ( $zip->open( $file_path ) !== true ) {
+			return '';
+		}
+		$xml = $zip->getFromName( 'word/document.xml' );
+		$zip->close();
+		if ( ! $xml ) {
+			return '';
+		}
+		$dom = new DOMDocument();
+		@$dom->loadXML( $xml );
+		$xpath = new DOMXPath( $dom );
+		$xpath->registerNamespace( 'w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main' );
+		$paragraphs = $xpath->query( '//w:p' );
+		$lines      = array();
+		foreach ( $paragraphs as $para ) {
+			$runs = $xpath->query( './/w:t', $para );
+			$line = '';
+			foreach ( $runs as $run ) {
+				$line .= $run->textContent;
+			}
+			$lines[] = $line;
+		}
+		return implode( "\n", $lines );
 	}
 
 	private function build_system_prompt( $session, $skills, $mode, $critique_text = null ) {

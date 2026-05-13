@@ -21,6 +21,8 @@ class Skillsaw_Activator {
 				team varchar(100) NOT NULL DEFAULT '',
 				status varchar(20) NOT NULL DEFAULT 'draft',
 				instructions longtext NOT NULL DEFAULT '',
+				greenhouse_job_id varchar(100) NOT NULL DEFAULT '',
+				candidate_note longtext NOT NULL DEFAULT '',
 				created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
 				updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 				PRIMARY KEY (id)

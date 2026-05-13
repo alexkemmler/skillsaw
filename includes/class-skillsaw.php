@@ -16,6 +16,7 @@ class Skillsaw {
 	private function load_dependencies() {
 		require_once SKILLSAW_PLUGIN_DIR . 'includes/class-settings.php';
 		require_once SKILLSAW_PLUGIN_DIR . 'includes/class-claude.php';
+		require_once SKILLSAW_PLUGIN_DIR . 'includes/class-greenhouse.php';
 		require_once SKILLSAW_PLUGIN_DIR . 'includes/class-api.php';
 		require_once SKILLSAW_PLUGIN_DIR . 'includes/class-sessions.php';
 		require_once SKILLSAW_PLUGIN_DIR . 'includes/class-evaluator.php';
@@ -58,17 +59,19 @@ class Skillsaw {
 
 		$role = $wpdb->get_row(
 			$wpdb->prepare(
-				"SELECT id, title FROM {$wpdb->prefix}skillsaw_roles WHERE id = %d AND status = 'active'",
+				"SELECT id, title, status FROM {$wpdb->prefix}skillsaw_roles WHERE id = %d",
 				$role_id
 			),
 			ARRAY_A
 		);
 
-		if ( ! $role ) {
+		if ( ! $role || $role['status'] === 'draft' ) {
 			return '';
 		}
 
-		$has_critique = (bool) $wpdb->get_var(
+		$active = $role['status'] === 'active';
+
+		$has_critique = $active && (bool) $wpdb->get_var(
 			$wpdb->prepare(
 				"SELECT COUNT(*) FROM {$wpdb->prefix}skillsaw_documents
 				 WHERE role_id = %d AND is_critique_version = 1",
@@ -76,18 +79,19 @@ class Skillsaw {
 			)
 		);
 
-		$skills = $wpdb->get_col(
+		$skills = $active ? $wpdb->get_col(
 			$wpdb->prepare(
 				"SELECT name FROM {$wpdb->prefix}skillsaw_skills WHERE role_id = %d ORDER BY sort_order ASC",
 				$role_id
 			)
-		);
+		) : array();
 
 		self::$embed_on_page = true;
 
 		return sprintf(
-			'<div class="skillsaw-embed" data-role-id="%d" data-has-critique="%s" data-role-title="%s" data-role-skills="%s"></div>',
+			'<div class="skillsaw-embed" data-role-id="%d" data-active="%s" data-has-critique="%s" data-role-title="%s" data-role-skills="%s"></div>',
 			esc_attr( $role_id ),
+			$active ? 'true' : 'false',
 			$has_critique ? 'true' : 'false',
 			esc_attr( $role['title'] ),
 			esc_attr( wp_json_encode( $skills ) )

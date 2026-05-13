@@ -751,12 +751,17 @@ class Skillsaw_API {
 			return new WP_Error( 'not_found', 'Session not found.', array( 'status' => 404 ) );
 		}
 
-		if ( $session['status'] === 'complete' ) {
-			return rest_ensure_response( array( 'ok' => true ) );
-		}
-
 		$name  = sanitize_text_field( $request->get_param( 'name' ) ?? '' );
 		$email = sanitize_email( $request->get_param( 'email' ) ?? '' );
+
+		if ( $session['status'] === 'complete' ) {
+			// Session already complete (endSession fired before form submit).
+			// Update name/email if the form is now providing them.
+			if ( $name || $email ) {
+				$sessions->update_identity( $session['id'], $name, $email );
+			}
+			return rest_ensure_response( array( 'ok' => true ) );
+		}
 
 		$sessions->complete_session( $session['id'], $name, $email );
 

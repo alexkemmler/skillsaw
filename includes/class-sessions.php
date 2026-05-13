@@ -186,6 +186,22 @@ class Skillsaw_Sessions {
 		);
 	}
 
+	/**
+	 * Update candidate name/email on an already-complete session.
+	 * Used when the form submit fires after endSession() already finalized.
+	 */
+	public function update_identity( $session_id, $name, $email ) {
+		global $wpdb;
+
+		$data = array();
+		if ( $name )  $data['candidate_name']  = sanitize_text_field( $name );
+		if ( $email ) $data['candidate_email'] = sanitize_email( $email );
+
+		if ( $data ) {
+			$wpdb->update( "{$wpdb->prefix}skillsaw_sessions", $data, array( 'id' => $session_id ) );
+		}
+	}
+
 	// -------------------------------------------------------------------------
 	// Rate limiting
 	// -------------------------------------------------------------------------

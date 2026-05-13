@@ -22,6 +22,12 @@ class Skillsaw_API {
 			),
 		) );
 
+		register_rest_route( self::NAMESPACE, '/roles/(?P<id>\d+)/duplicate', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'duplicate_role' ),
+			'permission_callback' => array( $this, 'admin_permission' ),
+		) );
+
 		register_rest_route( self::NAMESPACE, '/roles/(?P<id>\d+)', array(
 			array(
 				'methods'             => WP_REST_Server::READABLE,
@@ -232,6 +238,98 @@ class Skillsaw_API {
 		}
 
 		return $this->get_role( $request );
+	}
+
+	public function duplicate_role( $request ) {
+		global $wpdb;
+
+		$original = $wpdb->get_row(
+			$wpdb->prepare( "SELECT * FROM {$wpdb->prefix}skillsaw_roles WHERE id = %d", $request['id'] ),
+			ARRAY_A
+		);
+
+		if ( ! $original ) {
+			return new WP_Error( 'not_found', 'Role not found.', array( 'status' => 404 ) );
+		}
+
+		// Insert new role — same content, draft status, "Copy of" prefix.
+		$wpdb->insert( "{$wpdb->prefix}skillsaw_roles", array(
+			'title'             => 'Copy of ' . $original['title'],
+			'division'          => $original['division'],
+			'team'              => $original['team'],
+			'status'            => 'draft',
+			'instructions'      => $original['instructions'],
+			'candidate_note'    => $original['candidate_note'],
+			'greenhouse_job_id' => $original['greenhouse_job_id'],
+		) );
+		$new_role_id = $wpdb->insert_id;
+
+		// Copy skills.
+		$skills = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT name, sort_order FROM {$wpdb->prefix}skillsaw_skills WHERE role_id = %d ORDER BY sort_order ASC",
+				$original['id']
+			),
+			ARRAY_A
+		);
+		foreach ( $skills as $skill ) {
+			$wpdb->insert( "{$wpdb->prefix}skillsaw_skills", array(
+				'role_id'    => $new_role_id,
+				'name'       => $skill['name'],
+				'sort_order' => $skill['sort_order'],
+			) );
+		}
+
+		// Copy documents. Track old-id → new-id so critique parent links stay intact.
+		$docs = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM {$wpdb->prefix}skillsaw_documents WHERE role_id = %d ORDER BY id ASC",
+				$original['id']
+			),
+			ARRAY_A
+		);
+
+		$id_map = array(); // old doc id => new doc id
+
+		// First pass: non-critique docs.
+		foreach ( $docs as $doc ) {
+			if ( $doc['is_critique_version'] ) {
+				continue;
+			}
+			$wpdb->insert( "{$wpdb->prefix}skillsaw_documents", array(
+				'role_id'            => $new_role_id,
+				'attachment_id'      => $doc['attachment_id'],
+				'name'               => $doc['name'],
+				'type'               => $doc['type'],
+				'skills'             => $doc['skills'],
+				'is_critique_version' => 0,
+				'parent_document_id' => null,
+				'critique_text'      => null,
+			) );
+			$id_map[ $doc['id'] ] = $wpdb->insert_id;
+		}
+
+		// Second pass: critique versions with remapped parent_document_id.
+		foreach ( $docs as $doc ) {
+			if ( ! $doc['is_critique_version'] ) {
+				continue;
+			}
+			$new_parent = $id_map[ $doc['parent_document_id'] ] ?? null;
+			$wpdb->insert( "{$wpdb->prefix}skillsaw_documents", array(
+				'role_id'             => $new_role_id,
+				'attachment_id'       => $doc['attachment_id'],
+				'name'                => $doc['name'],
+				'type'                => $doc['type'],
+				'skills'              => $doc['skills'],
+				'is_critique_version' => 1,
+				'parent_document_id'  => $new_parent,
+				'critique_text'       => $doc['critique_text'],
+			) );
+		}
+
+		$get_request = new WP_REST_Request( 'GET' );
+		$get_request->set_url_params( array( 'id' => $new_role_id ) );
+		return $this->get_role( $get_request );
 	}
 
 	public function delete_role( $request ) {

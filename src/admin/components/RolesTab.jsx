@@ -369,7 +369,7 @@ function RoleConfig( { role, onSave, onClose } ) {
 	);
 }
 
-function RoleRow( { role, expanded, onToggle, onUpdate, onDelete } ) {
+function RoleRow( { role, expanded, onToggle, onUpdate, onDelete, onDuplicate } ) {
 	const configured = !! ( role.skills?.length );
 
 	const handleStatusChange = async ( updatedRole ) => {
@@ -402,6 +402,13 @@ function RoleRow( { role, expanded, onToggle, onUpdate, onDelete } ) {
 				</span>
 				<span className="skillsaw-role-applicants">{ role.applicants ?? 0 }</span>
 				<CopyEmbedButton role={ role } />
+				<Button
+					variant="tertiary"
+					size="small"
+					onClick={ ( e ) => { e.stopPropagation(); onDuplicate( role.id ); } }
+				>
+					Duplicate
+				</Button>
 				<Button
 					variant="tertiary"
 					size="small"
@@ -472,6 +479,19 @@ export default function RolesTab() {
 		}
 	};
 
+	const handleDuplicate = async ( id ) => {
+		try {
+			const copy = await apiFetch( {
+				path:   `/skillsaw/v1/roles/${ id }/duplicate`,
+				method: 'POST',
+			} );
+			setRoles( ( rs ) => [ copy, ...rs ] );
+			setExpanded( copy.id );
+		} catch ( err ) {
+			setError( err.message );
+		}
+	};
+
 	const filtered = roles.filter( ( r ) =>
 		! search || r.title.toLowerCase().includes( search.toLowerCase() )
 	);
@@ -528,6 +548,7 @@ export default function RolesTab() {
 						onToggle={ () => setExpanded( expandedId === role.id ? null : role.id ) }
 						onUpdate={ handleUpdate }
 						onDelete={ handleDelete }
+						onDuplicate={ handleDuplicate }
 					/>
 				) ) }
 			</div>

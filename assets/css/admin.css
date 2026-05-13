@@ -131,7 +131,7 @@
 }
 
 .skillsaw-roles-list-head {
-	grid-template-columns: 24px 1fr 120px 140px 120px 130px 60px 110px 70px;
+	grid-template-columns: 24px 1fr 120px 140px 120px 130px 60px 110px 160px;
 }
 
 .skillsaw-candidates-list-head {
@@ -143,7 +143,7 @@
 .skillsaw-role-row:last-child { border-bottom: none; }
 .skillsaw-role-row-header {
 	display: grid;
-	grid-template-columns: 24px 1fr 120px 140px 120px 130px 60px 110px 70px;
+	grid-template-columns: 24px 1fr 120px 140px 120px 130px 60px 110px 160px;
 	gap: 12px;
 	align-items: center;
 	padding: 12px 16px;
@@ -153,7 +153,7 @@
 }
 .skillsaw-role-row-header:hover { background: #f6f7f7; }
 .skillsaw-role-row--expanded .skillsaw-role-row-header { background: #f6f7f7; }
-.skillsaw-chevron { color: #50575e; font-size: 12px; }
+.skillsaw-chevron { color: #50575e; font-size: 18px; line-height: 1; }
 .skillsaw-role-title { font-weight: 600; }
 .skillsaw-role-id { display: block; font-size: 11px; font-weight: 400; color: #8c8f94; }
 .skillsaw-role-team, .skillsaw-role-division { font-size: 13px; color: #50575e; }

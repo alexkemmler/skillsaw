@@ -35,6 +35,7 @@ class Skillsaw {
 
 	private function define_public_hooks() {
 		add_shortcode( 'skillsaw', array( $this, 'render_shortcode' ) );
+		add_shortcode( 'skillsaw_apply', array( $this, 'render_apply_shortcode' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_embed_assets' ) );
 
 		add_action( 'skillsaw_evaluate_session', function ( $session_id ) {
@@ -104,13 +105,189 @@ class Skillsaw {
 	}
 
 	// -------------------------------------------------------------------------
+	// Shortcode: [skillsaw_apply role="123"]
+	// -------------------------------------------------------------------------
+
+	public function render_apply_shortcode( $atts ) {
+		$atts    = shortcode_atts( array( 'role' => '' ), $atts );
+		$role_id = intval( $atts['role'] );
+
+		if ( ! $role_id ) {
+			return '';
+		}
+
+		global $wpdb;
+
+		$role = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT id, title, division, team, status FROM {$wpdb->prefix}skillsaw_roles WHERE id = %d",
+				$role_id
+			),
+			ARRAY_A
+		);
+
+		if ( ! $role || $role['status'] === 'draft' ) {
+			return '';
+		}
+
+		self::$embed_on_page = true;
+
+		// Handle POST submission.
+		if ( isset( $_POST['skillsaw_apply_nonce'] ) ) {
+			if ( ! wp_verify_nonce( sanitize_key( $_POST['skillsaw_apply_nonce'] ), 'skillsaw_apply_' . $role_id ) ) {
+				return '<p>' . esc_html__( 'Security check failed. Please try again.', 'skillsaw' ) . '</p>';
+			}
+			return $this->render_apply_thankyou( $role );
+		}
+
+		ob_start();
+		?>
+		<div class="skillsaw-apply-page">
+			<h1 class="skillsaw-apply-role-title"><?php echo esc_html( $role['title'] ); ?></h1>
+			<?php
+			$subtitle = implode( ' · ', array_filter( array( $role['division'], $role['team'] ) ) );
+			if ( $subtitle ) : ?>
+				<p class="skillsaw-apply-location"><?php echo esc_html( $subtitle ); ?></p>
+			<?php endif; ?>
+
+			<div class="skillsaw-apply-chat">
+				<?php echo $this->render_shortcode( array( 'role' => $role_id ) ); ?>
+			</div>
+
+			<div class="skillsaw-apply-form">
+				<h3><?php esc_html_e( 'Complete your application', 'skillsaw' ); ?></h3>
+
+				<form id="application_form" method="post">
+					<?php wp_nonce_field( 'skillsaw_apply_' . $role_id, 'skillsaw_apply_nonce' ); ?>
+					<input type="hidden" name="skillsaw_role_id" value="<?php echo esc_attr( $role_id ); ?>">
+
+					<div class="skillsaw-form-row skillsaw-form-row--half">
+						<div class="skillsaw-form-group">
+							<label for="first_name"><?php esc_html_e( 'First name', 'skillsaw' ); ?> <span aria-hidden="true">*</span></label>
+							<input type="text" id="first_name" name="first_name" required autocomplete="given-name">
+						</div>
+						<div class="skillsaw-form-group">
+							<label for="last_name"><?php esc_html_e( 'Last name', 'skillsaw' ); ?> <span aria-hidden="true">*</span></label>
+							<input type="text" id="last_name" name="last_name" required autocomplete="family-name">
+						</div>
+					</div>
+
+					<div class="skillsaw-form-row skillsaw-form-row--half">
+						<div class="skillsaw-form-group">
+							<label for="email"><?php esc_html_e( 'Email', 'skillsaw' ); ?> <span aria-hidden="true">*</span></label>
+							<input type="email" id="email" name="email" required autocomplete="email">
+						</div>
+						<div class="skillsaw-form-group">
+							<label for="phone"><?php esc_html_e( 'Phone', 'skillsaw' ); ?></label>
+							<input type="tel" id="phone" name="phone" autocomplete="tel">
+						</div>
+					</div>
+
+					<div class="skillsaw-form-row">
+						<div class="skillsaw-form-group">
+							<label for="location"><?php esc_html_e( 'City, State / Country', 'skillsaw' ); ?> <span aria-hidden="true">*</span></label>
+							<input type="text" id="location" name="location" required autocomplete="address-level2">
+						</div>
+					</div>
+
+					<div class="skillsaw-form-row">
+						<div class="skillsaw-form-group">
+							<label for="resume"><?php esc_html_e( 'Resume / CV', 'skillsaw' ); ?> <span aria-hidden="true">*</span></label>
+							<input type="file" id="resume" name="resume" accept=".pdf,.docx,.doc,.txt" required>
+							<p class="skillsaw-form-help"><?php esc_html_e( 'PDF, DOCX, or TXT. Max 5 MB.', 'skillsaw' ); ?></p>
+						</div>
+					</div>
+
+					<div class="skillsaw-form-row">
+						<div class="skillsaw-form-group">
+							<label for="cover_letter"><?php esc_html_e( 'Cover letter', 'skillsaw' ); ?></label>
+							<textarea id="cover_letter" name="cover_letter" rows="6" placeholder="<?php esc_attr_e( 'Tell us about yourself and why you\'re interested in this role…', 'skillsaw' ); ?>"></textarea>
+						</div>
+					</div>
+
+					<hr class="skillsaw-form-divider">
+
+					<p class="skillsaw-form-section-title"><?php esc_html_e( 'Links', 'skillsaw' ); ?></p>
+
+					<div class="skillsaw-form-row">
+						<div class="skillsaw-form-group">
+							<label for="linkedin"><?php esc_html_e( 'LinkedIn profile URL', 'skillsaw' ); ?></label>
+							<input type="url" id="linkedin" name="linkedin" placeholder="https://linkedin.com/in/…" autocomplete="url">
+						</div>
+					</div>
+
+					<div class="skillsaw-form-row">
+						<div class="skillsaw-form-group">
+							<label for="website"><?php esc_html_e( 'Website / portfolio URL', 'skillsaw' ); ?></label>
+							<input type="url" id="website" name="website" placeholder="https://…" autocomplete="url">
+						</div>
+					</div>
+
+					<hr class="skillsaw-form-divider">
+
+					<p class="skillsaw-form-section-title"><?php esc_html_e( 'Additional information', 'skillsaw' ); ?></p>
+
+					<div class="skillsaw-form-row">
+						<div class="skillsaw-form-group">
+							<label for="heard_about"><?php esc_html_e( 'How did you hear about this role?', 'skillsaw' ); ?></label>
+							<select id="heard_about" name="heard_about">
+								<option value=""><?php esc_html_e( '— Select —', 'skillsaw' ); ?></option>
+								<option value="linkedin"><?php esc_html_e( 'LinkedIn', 'skillsaw' ); ?></option>
+								<option value="referral"><?php esc_html_e( 'Employee referral', 'skillsaw' ); ?></option>
+								<option value="job_board"><?php esc_html_e( 'Job board', 'skillsaw' ); ?></option>
+								<option value="company_website"><?php esc_html_e( 'Company website', 'skillsaw' ); ?></option>
+								<option value="other"><?php esc_html_e( 'Other', 'skillsaw' ); ?></option>
+							</select>
+						</div>
+					</div>
+
+					<div class="skillsaw-form-row">
+						<div class="skillsaw-form-group">
+							<label for="additional_context"><?php esc_html_e( 'Anything else you\'d like us to know?', 'skillsaw' ); ?></label>
+							<textarea id="additional_context" name="additional_context" rows="4"></textarea>
+						</div>
+					</div>
+
+					<div class="skillsaw-form-submit">
+						<button type="submit" class="skillsaw-apply-submit"><?php esc_html_e( 'Submit application', 'skillsaw' ); ?></button>
+					</div>
+				</form>
+			</div>
+		</div>
+		<?php
+		return ob_get_clean();
+	}
+
+	private function render_apply_thankyou( $role ) {
+		ob_start();
+		?>
+		<div class="skillsaw-apply-thankyou">
+			<h2><?php esc_html_e( 'Application received!', 'skillsaw' ); ?></h2>
+			<p>
+				<?php
+				printf(
+					/* translators: %s: role title */
+					esc_html__( 'Thank you for applying for %s. We\'ll be in touch if your application moves forward.', 'skillsaw' ),
+					'<strong>' . esc_html( $role['title'] ) . '</strong>'
+				);
+				?>
+			</p>
+		</div>
+		<?php
+		return ob_get_clean();
+	}
+
+	// -------------------------------------------------------------------------
 	// Frontend asset enqueue
 	// -------------------------------------------------------------------------
 
 	public function enqueue_embed_assets() {
 		// Only enqueue if this page actually has the shortcode.
 		global $post;
-		if ( ! $post || ! has_shortcode( $post->post_content, 'skillsaw' ) ) {
+		$has_chat  = $post && has_shortcode( $post->post_content, 'skillsaw' );
+		$has_apply = $post && has_shortcode( $post->post_content, 'skillsaw_apply' );
+
+		if ( ! $has_chat && ! $has_apply ) {
 			return;
 		}
 
@@ -137,5 +314,14 @@ class Skillsaw {
 			array(),
 			SKILLSAW_VERSION
 		);
+
+		if ( $has_apply ) {
+			wp_enqueue_style(
+				'skillsaw-apply',
+				SKILLSAW_PLUGIN_URL . 'assets/css/apply.css',
+				array(),
+				SKILLSAW_VERSION
+			);
+		}
 	}
 }

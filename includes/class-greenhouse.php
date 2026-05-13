@@ -63,7 +63,11 @@ class Skillsaw_Greenhouse {
 
 		$transcript   = $this->fetch_transcript( $session['id'] );
 		$note         = $this->build_note( $session, $skill_ratings, $transcript );
-		$note_payload = array( 'body' => $note, 'visibility' => 'admin_only' );
+		$note_payload = array(
+			'user_id'    => (int) $this->on_behalf_of,
+			'body'       => $note,
+			'visibility' => 'private',
+		);
 
 		// Post to the candidate activity feed (the supported Harvest API endpoint).
 		// The note appears under the Activity Feed tab on the candidate's profile.

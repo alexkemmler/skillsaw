@@ -355,6 +355,25 @@
 
 .skillsaw-candidate-actions {
 	align-self: center;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	align-items: flex-start;
+}
+
+.skillsaw-gh-error {
+	font-size: 11px;
+	color: #d63638;
+	max-width: 160px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	cursor: help;
+}
+
+.skillsaw-gh-ok {
+	font-size: 11px;
+	color: #00a32a;
 }
 
 /* ── File card (enhanced) ───────────────────────────────────────────────── */

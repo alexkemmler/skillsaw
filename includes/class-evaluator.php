@@ -138,6 +138,11 @@ class Skillsaw_Evaluator {
 		$candidate_id = $greenhouse->push_session( $session, $role, $rating_rows );
 
 		if ( is_wp_error( $candidate_id ) ) {
+			$wpdb->update(
+				"{$wpdb->prefix}skillsaw_sessions",
+				array( 'gh_push_error' => substr( $candidate_id->get_error_message(), 0, 500 ) ),
+				array( 'id' => $session['id'] )
+			);
 			error_log( 'Skillsaw Greenhouse push failed: ' . $candidate_id->get_error_message() );
 			return;
 		}
@@ -147,6 +152,7 @@ class Skillsaw_Evaluator {
 			array(
 				'greenhouse_candidate_id' => (string) $candidate_id,
 				'gh_pushed_at'            => current_time( 'mysql' ),
+				'gh_push_error'           => '',
 			),
 			array( 'id' => $session['id'] )
 		);

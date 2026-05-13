@@ -68,6 +68,7 @@ class Skillsaw_Activator {
 				ip_hash varchar(64) NOT NULL DEFAULT '',
 				greenhouse_candidate_id varchar(100) NOT NULL DEFAULT '',
 				gh_pushed_at datetime DEFAULT NULL,
+				gh_push_error varchar(500) NOT NULL DEFAULT '',
 				PRIMARY KEY (id),
 				UNIQUE KEY session_token (session_token),
 				KEY role_id (role_id),

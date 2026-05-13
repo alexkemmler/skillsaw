@@ -199,6 +199,14 @@ function CandidateRow( { session, onOpenTranscript } ) {
 			</div>
 
 			<div className="skillsaw-candidate-actions">
+				{ session.gh_push_error && (
+					<span className="skillsaw-gh-error" title={ session.gh_push_error }>
+						⚠ GH: { session.gh_push_error }
+					</span>
+				) }
+				{ session.gh_pushed_at && ! session.gh_push_error && (
+					<span className="skillsaw-gh-ok" title={ `Pushed ${ session.gh_pushed_at }` }>✓ Greenhouse</span>
+				) }
 				<Button
 					variant="primary"
 					size="small"

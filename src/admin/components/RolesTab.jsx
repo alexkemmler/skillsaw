@@ -402,21 +402,23 @@ function RoleRow( { role, expanded, onToggle, onUpdate, onDelete, onDuplicate } 
 				</span>
 				<span className="skillsaw-role-applicants">{ role.applicants ?? 0 }</span>
 				<CopyEmbedButton role={ role } />
-				<Button
-					variant="tertiary"
-					size="small"
-					onClick={ ( e ) => { e.stopPropagation(); onDuplicate( role.id ); } }
-				>
-					Duplicate
-				</Button>
-				<Button
-					variant="tertiary"
-					size="small"
-					isDestructive
-					onClick={ ( e ) => { e.stopPropagation(); onDelete( role.id ); } }
-				>
-					Delete
-				</Button>
+				<div className="skillsaw-role-actions" onClick={ ( e ) => e.stopPropagation() }>
+					<Button
+						variant="tertiary"
+						size="small"
+						onClick={ () => onDuplicate( role.id ) }
+					>
+						Duplicate
+					</Button>
+					<Button
+						variant="tertiary"
+						size="small"
+						isDestructive
+						onClick={ () => onDelete( role.id ) }
+					>
+						Delete
+					</Button>
+				</div>
 			</div>
 			{ expanded && (
 				<RoleConfig

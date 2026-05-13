@@ -134,25 +134,27 @@ class Skillsaw_Evaluator {
 			return;
 		}
 
-		$greenhouse   = new Skillsaw_Greenhouse();
-		$candidate_id = $greenhouse->push_session( $session, $role, $rating_rows );
+		$greenhouse = new Skillsaw_Greenhouse();
+		$result     = $greenhouse->push_session( $session, $role, $rating_rows );
 
-		if ( is_wp_error( $candidate_id ) ) {
+		if ( is_wp_error( $result ) ) {
 			$wpdb->update(
 				"{$wpdb->prefix}skillsaw_sessions",
-				array( 'gh_push_error' => substr( $candidate_id->get_error_message(), 0, 500 ) ),
+				array( 'gh_push_error' => $result->get_error_message() ),
 				array( 'id' => $session['id'] )
 			);
-			error_log( 'Skillsaw Greenhouse push failed: ' . $candidate_id->get_error_message() );
+			error_log( 'Skillsaw Greenhouse push failed: ' . $result->get_error_message() );
 			return;
 		}
+
+		$note_error = ! empty( $result['note_error'] ) ? 'Note: ' . $result['note_error'] : '';
 
 		$wpdb->update(
 			"{$wpdb->prefix}skillsaw_sessions",
 			array(
-				'greenhouse_candidate_id' => (string) $candidate_id,
+				'greenhouse_candidate_id' => (string) $result['candidate_id'],
 				'gh_pushed_at'            => current_time( 'mysql' ),
-				'gh_push_error'           => '',
+				'gh_push_error'           => $note_error,
 			),
 			array( 'id' => $session['id'] )
 		);

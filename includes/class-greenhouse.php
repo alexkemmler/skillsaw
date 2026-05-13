@@ -61,15 +61,20 @@ class Skillsaw_Greenhouse {
 			return new WP_Error( 'no_candidate_id', 'Greenhouse did not return a candidate ID.' );
 		}
 
-		$transcript  = $this->fetch_transcript( $session['id'] );
-		$note        = $this->build_note( $session, $skill_ratings, $transcript );
-		$note_payload = array( 'body' => $note, 'visibility' => 'private' );
+		$transcript   = $this->fetch_transcript( $session['id'] );
+		$note         = $this->build_note( $session, $skill_ratings, $transcript );
+		$note_payload = array( 'body' => $note, 'visibility' => 'admin_only' );
 
-		// Post to the application activity feed if we linked a job — that's
-		// where the hiring team looks. Fall back to candidate feed otherwise.
+		// Post to the application activity feed if we linked a job (that's
+		// where the hiring team looks). Fall back to candidate feed otherwise.
 		$application_id = null;
 		if ( $has_job && ! empty( $response['applications'] ) ) {
-			$application_id = $response['applications'][0]['id'] ?? null;
+			foreach ( $response['applications'] as $app ) {
+				if ( ! empty( $app['id'] ) ) {
+					$application_id = $app['id'];
+					break;
+				}
+			}
 		}
 
 		if ( $application_id ) {
@@ -78,11 +83,18 @@ class Skillsaw_Greenhouse {
 			$note_result = $this->request( 'POST', "/candidates/{$candidate_id}/activity_feed/notes", $note_payload );
 		}
 
+		$note_error = '';
 		if ( is_wp_error( $note_result ) ) {
-			error_log( 'Skillsaw: Greenhouse note failed — ' . $note_result->get_error_message() );
+			$note_error = $note_result->get_error_message();
+			error_log( 'Skillsaw: Greenhouse note failed — ' . $note_error );
 		}
 
-		return $candidate_id;
+		// Return array so the evaluator can store both IDs and any note error.
+		return array(
+			'candidate_id'   => $candidate_id,
+			'application_id' => $application_id,
+			'note_error'     => $note_error,
+		);
 	}
 
 	// -------------------------------------------------------------------------

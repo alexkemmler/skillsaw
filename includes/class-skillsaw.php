@@ -15,6 +15,7 @@ class Skillsaw {
 
 	private function load_dependencies() {
 		require_once SKILLSAW_PLUGIN_DIR . 'includes/class-settings.php';
+		require_once SKILLSAW_PLUGIN_DIR . 'includes/class-pdf.php';
 		require_once SKILLSAW_PLUGIN_DIR . 'includes/class-claude.php';
 		require_once SKILLSAW_PLUGIN_DIR . 'includes/class-greenhouse.php';
 		require_once SKILLSAW_PLUGIN_DIR . 'includes/class-api.php';

@@ -150,7 +150,7 @@ function TranscriptModal( { session, onClose } ) {
 
 // ─── Candidate row ────────────────────────────────────────────────────────────
 
-function CandidateRow( { session, onOpenTranscript } ) {
+function CandidateRow( { session, onOpenTranscript, onDownloadPdf } ) {
 	const initials = session.candidate_name
 		.split( ' ' )
 		.map( ( n ) => n[ 0 ] )
@@ -207,13 +207,22 @@ function CandidateRow( { session, onOpenTranscript } ) {
 				{ session.gh_pushed_at && ! session.gh_push_error && (
 					<span className="skillsaw-gh-ok" title={ `Pushed ${ session.gh_pushed_at }` }>✓ Greenhouse</span>
 				) }
-				<Button
-					variant="primary"
-					size="small"
-					onClick={ () => onOpenTranscript( session ) }
-				>
-					Transcript
-				</Button>
+				<div className="skillsaw-candidate-btns">
+					<Button
+						variant="primary"
+						size="small"
+						onClick={ () => onOpenTranscript( session ) }
+					>
+						Transcript
+					</Button>
+					<button
+						className="skillsaw-pdf-btn"
+						title="Download assessment PDF"
+						onClick={ () => onDownloadPdf( session.id ) }
+					>
+						↓ PDF
+					</button>
+				</div>
 			</div>
 		</div>
 	);
@@ -230,6 +239,20 @@ export default function CandidatesTab() {
 	const [ roleFilter, setRoleFilter ] = useState( 'all' );
 	const [ modeFilter, setModeFilter ] = useState( 'all' );
 	const [ openSession, setOpen      ] = useState( null );
+
+	const handleDownloadPdf = async ( id ) => {
+		try {
+			const { filename, data } = await apiFetch( { path: `/skillsaw/v1/candidates/${ id }/pdf` } );
+			const blob = new Blob( [ Uint8Array.from( atob( data ), c => c.charCodeAt( 0 ) ) ], { type: 'application/pdf' } );
+			const url  = URL.createObjectURL( blob );
+			const a    = document.createElement( 'a' );
+			a.href = url; a.download = filename; a.click();
+			URL.revokeObjectURL( url );
+		} catch ( err ) {
+			// eslint-disable-next-line no-alert
+			window.alert( 'PDF generation failed: ' + err.message );
+		}
+	};
 
 	useEffect( () => {
 		Promise.all( [
@@ -330,6 +353,7 @@ export default function CandidatesTab() {
 						key={ session.id }
 						session={ session }
 						onOpenTranscript={ setOpen }
+						onDownloadPdf={ handleDownloadPdf }
 					/>
 				) ) }
 			</div>

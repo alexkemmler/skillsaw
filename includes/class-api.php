@@ -92,6 +92,12 @@ class Skillsaw_API {
 			'permission_callback' => array( $this, 'admin_permission' ),
 		) );
 
+		register_rest_route( self::NAMESPACE, '/candidates/(?P<id>\d+)/pdf', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'get_candidate_pdf' ),
+			'permission_callback' => array( $this, 'admin_permission' ),
+		) );
+
 		// Public session routes
 		register_rest_route( self::NAMESPACE, '/sessions/start', array(
 			'methods'             => WP_REST_Server::CREATABLE,
@@ -554,6 +560,49 @@ class Skillsaw_API {
 		}
 
 		return rest_ensure_response( $sessions );
+	}
+
+	public function get_candidate_pdf( $request ) {
+		global $wpdb;
+
+		$session = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT s.*, r.title as role_title FROM {$wpdb->prefix}skillsaw_sessions s
+				 LEFT JOIN {$wpdb->prefix}skillsaw_roles r ON r.id = s.role_id
+				 WHERE s.id = %d",
+				$request['id']
+			),
+			ARRAY_A
+		);
+
+		if ( ! $session ) {
+			return new WP_Error( 'not_found', 'Session not found.', array( 'status' => 404 ) );
+		}
+
+		$skill_ratings = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT skill_name, rating FROM {$wpdb->prefix}skillsaw_skill_ratings WHERE session_id = %d",
+				$request['id']
+			),
+			ARRAY_A
+		);
+
+		$transcript = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT role, content FROM {$wpdb->prefix}skillsaw_messages WHERE session_id = %d ORDER BY created_at ASC",
+				$request['id']
+			),
+			ARRAY_A
+		);
+
+		require_once SKILLSAW_PLUGIN_DIR . 'includes/class-pdf.php';
+		$pdf      = Skillsaw_PDF::build( $session, $skill_ratings ?: array(), $transcript ?: array() );
+		$filename = sanitize_file_name( ( $session['candidate_name'] ?: 'assessment' ) . '_skillsaw.pdf' );
+
+		return rest_ensure_response( array(
+			'filename' => $filename,
+			'data'     => base64_encode( $pdf ),
+		) );
 	}
 
 	public function get_transcript( $request ) {

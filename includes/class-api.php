@@ -756,9 +756,11 @@ class Skillsaw_API {
 
 		if ( $session['status'] === 'complete' ) {
 			// Session already complete (endSession fired before form submit).
-			// Update name/email if the form is now providing them.
+			// Update name/email and re-trigger evaluation so Greenhouse push
+			// uses the actual name rather than the empty string from endSession.
 			if ( $name || $email ) {
 				$sessions->update_identity( $session['id'], $name, $email );
+				wp_schedule_single_event( time(), 'skillsaw_evaluate_session', array( $session['id'] ) );
 			}
 			return rest_ensure_response( array( 'ok' => true ) );
 		}

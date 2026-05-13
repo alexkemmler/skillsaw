@@ -117,8 +117,8 @@ class Skillsaw_Evaluator {
 			return;
 		}
 
-		// Don't push twice.
-		if ( ! empty( $session['gh_pushed_at'] ) ) {
+		// Don't push if already succeeded with a name present.
+		if ( ! empty( $session['gh_pushed_at'] ) && ! empty( $session['candidate_name'] ) ) {
 			return;
 		}
 

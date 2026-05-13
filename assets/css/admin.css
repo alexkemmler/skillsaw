@@ -364,11 +364,8 @@
 .skillsaw-gh-error {
 	font-size: 11px;
 	color: #d63638;
-	max-width: 160px;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	cursor: help;
+	max-width: 180px;
+	word-break: break-word;
 }
 
 .skillsaw-gh-ok {

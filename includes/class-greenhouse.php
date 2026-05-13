@@ -126,7 +126,20 @@ class Skillsaw_Greenhouse {
 		$data = json_decode( wp_remote_retrieve_body( $response ), true );
 
 		if ( $code < 200 || $code >= 300 ) {
-			$msg = ( is_array( $data ) && isset( $data['message'] ) ) ? $data['message'] : "Greenhouse API error (HTTP {$code})";
+			if ( is_array( $data ) ) {
+				if ( ! empty( $data['errors'] ) && is_array( $data['errors'] ) ) {
+					$msgs = array_map( function( $e ) {
+						return is_array( $e ) ? ( $e['message'] ?? json_encode( $e ) ) : (string) $e;
+					}, $data['errors'] );
+					$msg = implode( '; ', $msgs );
+				} elseif ( ! empty( $data['message'] ) ) {
+					$msg = $data['message'];
+				} else {
+					$msg = "HTTP {$code}: " . wp_remote_retrieve_body( $response );
+				}
+			} else {
+				$msg = "Greenhouse API error (HTTP {$code})";
+			}
 			return new WP_Error( 'greenhouse_api_error', $msg );
 		}
 

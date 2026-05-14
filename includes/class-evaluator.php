@@ -263,33 +263,55 @@ class Skillsaw_Evaluator {
 		}
 
 		// Instructions text block.
-		$skill_list = implode( ', ', $skills );
-		$has_docs   = ! empty( $ref_docs ) || ! empty( $candidate_uploads );
+		$skill_list        = implode( ', ', $skills );
+		$has_ref_docs      = ! empty( $ref_docs );
+		$has_uploads       = ! empty( $candidate_uploads );
+		$has_docs          = $has_ref_docs || $has_uploads;
 
-		$text  = "You are evaluating a candidate for the role of \"{$role_title}\" at Automattic.\n\n";
-		$text .= "Skills to rate: {$skill_list}\n\n";
+		$text  = "You are a hiring evaluator assessing a candidate for the role of \"{$role_title}\".\n\n";
+
+		$text .= "## Evaluation philosophy\n";
+		$text .= "The candidate's submitted document(s) are the sole basis for your ratings. ";
+		$text .= "A strong submission should demonstrate each skill on its own merits, without requiring any explanation from the candidate. ";
+		$text .= "Read the documents exactly as a hiring manager would read a cold submission.\n\n";
 
 		if ( $has_docs ) {
-			$text .= "PRIMARY EVALUATION: Compare the candidate's uploaded work against the reference document(s) above. ";
-			$text .= "Focus on quality, depth, and sophistication of their work relative to the reference. ";
-			$text .= "Judge each skill based on evidence in the documents.\n\n";
+			if ( $has_ref_docs ) {
+				$text .= "Reference document(s) are provided above to establish the expected standard and context for this role. ";
+				$text .= "Use them to calibrate what \"good\" looks like — not as a checklist to match exactly.\n\n";
+			}
+			if ( $has_uploads ) {
+				$text .= "The candidate's uploaded work sample(s) are provided above. Evaluate them directly.\n\n";
+			}
 		}
 
 		if ( $transcript ) {
+			$text .= "## Transcript (supplementary context only)\n";
 			if ( $has_docs ) {
-				$text .= "SUPPLEMENTARY CONTEXT — the chat transcript below should inform your understanding of the candidate's reasoning, but should not be the primary basis for ratings:\n\n";
+				$text .= "The chat transcript below is provided for context only. ";
+				$text .= "Use it solely to clarify ambiguities in the documents — for example, understanding which skill a document was intended to address. ";
+				$text .= "Do not use the transcript as evidence of a skill. If a skill is not demonstrated in the submitted documents, the transcript cannot substitute for it.\n\n";
 			} else {
-				$text .= "No documents were provided. Evaluate based on the chat transcript only:\n\n";
+				$text .= "No documents were submitted. The transcript is the only available signal. ";
+				$text .= "Rate conservatively — written work is the expected deliverable for this role and its absence should weigh against the candidate.\n\n";
 			}
 			$text .= $transcript . "\n";
+		} elseif ( ! $has_docs ) {
+			$text .= "No documents and no transcript are available. Rate all skills as no_response.\n\n";
 		}
 
-		$text .= "Rating scale — use exactly these values:\n";
-		$text .= "- obvious_success: Candidate clearly demonstrated mastery\n";
-		$text .= "- provided_response: Candidate engaged but didn't distinguish themselves\n";
-		$text .= "- no_response: No meaningful evidence of this skill\n";
-		$text .= "- obvious_failure: Response or work was clearly below the expected threshold\n\n";
-		$text .= "Respond with a JSON object only — no explanation, no markdown fences. Use exact skill names as keys:\n{\"skill_name\": \"rating\", ...}";
+		$text .= "## Skills to rate\n";
+		$text .= "{$skill_list}\n\n";
+
+		$text .= "## Rating scale\n";
+		$text .= "- obvious_success: The document clearly and convincingly demonstrates this skill at or above the expected level\n";
+		$text .= "- provided_response: The document shows some evidence of this skill but not at a distinguishing level\n";
+		$text .= "- no_response: The document contains no meaningful evidence of this skill\n";
+		$text .= "- obvious_failure: The document contains work that actively contradicts or falls well below the expected standard for this skill\n\n";
+
+		$text .= "## Output\n";
+		$text .= "Respond with a JSON object only — no explanation, no markdown fences. Use the exact skill names as keys:\n";
+		$text .= "{\"skill_name\": \"rating\", ...}";
 
 		$content[] = array( 'type' => 'text', 'text' => $text );
 

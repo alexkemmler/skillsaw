@@ -318,14 +318,49 @@ class Skillsaw_Evaluator {
 			$text .= "Nothing was submitted. Rate all skills as no_response.\n\n";
 		}
 
+		$text .= "## How to evaluate skills\n";
+		$text .= "- Evaluate each skill independently. A document does not need to demonstrate every skill — only rate what is actually evidenced.\n";
+		$text .= "- If multiple documents are provided and they suggest different ratings for the same skill, apply the better rating. The strongest evidence takes precedence.\n";
+		$text .= "- These ratings are intended to guide human reviewers, not to make hiring decisions. ";
+		$text .= "\"Obvious success\" and \"obvious failure\" are signals to accelerate human review, not substitutes for it.\n\n";
+
 		$text .= "## Skills to rate\n";
 		$text .= "{$skill_list}\n\n";
 
-		$text .= "## Rating scale\n";
-		$text .= "- obvious_success: The submission clearly and convincingly demonstrates this skill\n";
-		$text .= "- provided_response: The submission shows some evidence of this skill but not at a distinguishing level\n";
-		$text .= "- no_response: The submission contains no meaningful evidence of this skill\n";
-		$text .= "- obvious_failure: The submission actively contradicts or falls well below the expected standard for this skill\n\n";
+		if ( $is_critique ) {
+			$text .= "## Rating scale — Critique path\n";
+			$text .= "\"Senior professional level\" means the depth, accuracy, and analytical quality of critique a senior practitioner in this field would produce.\n\n";
+			$text .= "- obvious_success: The critique leaves no doubt that the candidate has a high level of ability in this skill. ";
+			$text .= "The analysis is sophisticated and demonstrates the depth of understanding one would expect from someone capable of producing the reference document themselves. ";
+			$text .= "The skill is compellingly evidenced through the quality of the written analysis.\n\n";
+			$text .= "- provided_response: The skill is plausibly demonstrated through the critique, but there is room for doubt as to whether it reaches senior professional level. ";
+			$text .= "There is evidence of competence but the volume or character of the analysis falls short of definitively reaching that level. ";
+			$text .= "The critique must be at least marginally competent — not necessarily impressive, but not incompetent.\n\n";
+			$text .= "- no_response: No attempt has been made to address this skill in the critique, or the critique completely lacks content that could possibly demonstrate it.\n\n";
+			$text .= "- obvious_failure: An attempt was made to demonstrate this skill through the critique, but it revealed dramatic incompetence — ";
+			$text .= "for example, fundamental misunderstanding of the concepts being critiqued, catastrophically poor analytical quality, glaring factual errors, ";
+			$text .= "major logical contradictions, or flagrant ignorance of basic concepts in the field. ";
+			$text .= "The bar is high: the critique must make it impossible to believe a professional in the field produced it. ";
+			$text .= "Do not use this rating simply because the critique is weak or thin — use no_response or provided_response instead.\n\n";
+		} else {
+			$text .= "## Rating scale — Work sample path\n";
+			$text .= "\"Senior professional level\" means the level of skill demonstrated in the reference document for this role.\n\n";
+			$text .= "- obvious_success: The document leaves no doubt that the candidate has a high level of ability in this skill. ";
+			$text .= "It demonstrates competence, sophistication, and experience at or beyond senior professional level. ";
+			$text .= "The bottom line: could this candidate plausibly have produced the reference document themselves? If clearly yes, use this rating.\n\n";
+			$text .= "- provided_response: The skill is plausibly demonstrated, but there is room for doubt as to whether it reaches the level of the reference document. ";
+			$text .= "There may be evidence of senior professional level work, but the volume or character of that evidence falls short of definitively reaching or surpassing the reference. ";
+			$text .= "The work must be at least marginally competent — not necessarily impressive, but not incompetent.\n\n";
+			$text .= "- no_response: No documents were provided to demonstrate this skill, or documents were provided but completely lack content that could possibly demonstrate it. ";
+			$text .= "Use this when no apparent attempt has been made to demonstrate the skill. ";
+			$text .= "Do not use this when an attempt was made but failed — use obvious_failure for that.\n\n";
+			$text .= "- obvious_failure: An attempt was made to demonstrate this skill, but it demonstrated dramatic incompetence. ";
+			$text .= "This includes: stubborn misunderstanding of how the skill works, catastrophically low quality work, glaring errors, major logical contradictions, ";
+			$text .= "aggressively incorrect positions, decades-out-of-date practices, or flagrant ignorance of basic concepts. ";
+			$text .= "The bar is high: the document must make it impossible to believe a professional in the field produced it. ";
+			$text .= "This is not simply a failure to reach a mediocre standard — it is overwhelming evidence that the candidate has no idea what they are doing with respect to this skill. ";
+			$text .= "If irrelevant work was submitted for a skill, use no_response, not obvious_failure.\n\n";
+		}
 
 		$text .= "## Output\n";
 		$text .= "Respond with a JSON object only — no explanation, no markdown fences. Use the exact skill names as keys:\n";

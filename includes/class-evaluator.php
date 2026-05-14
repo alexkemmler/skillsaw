@@ -63,10 +63,37 @@ class Skillsaw_Evaluator {
 		$ref_docs          = $this->get_reference_docs( $session['role_id'] );
 		$candidate_uploads = $this->get_candidate_uploads( $session_id );
 
+		// Determine which skills the candidate explicitly tagged on at least one
+		// document. Skills not tagged on any document are automatically no_response —
+		// the candidate chose not to be evaluated on them.
+		$tagged_skills = array();
+		foreach ( $candidate_uploads as $upload ) {
+			foreach ( ( $upload['skills'] ?: array() ) as $skill ) {
+				$tagged_skills[ $skill ] = true;
+			}
+		}
+
+		$skills_to_evaluate = array_values( array_filter(
+			$skills,
+			fn( $s ) => isset( $tagged_skills[ $s ] )
+		) );
+
+		$auto_no_response = array_values( array_filter(
+			$skills,
+			fn( $s ) => ! isset( $tagged_skills[ $s ] )
+		) );
+
+		// If nothing was tagged, fall back to evaluating all skills (e.g. no
+		// uploads at all — transcript-only session).
+		if ( empty( $skills_to_evaluate ) ) {
+			$skills_to_evaluate = $skills;
+			$auto_no_response   = array();
+		}
+
 		// Build a user message (may contain PDF document blocks).
 		$content = $this->build_eval_content(
 			$session,
-			$skills,
+			$skills_to_evaluate,
 			$ref_docs,
 			$candidate_uploads,
 			$transcript
@@ -84,7 +111,12 @@ class Skillsaw_Evaluator {
 			return;
 		}
 
-		$ratings = $this->parse_ratings( $response, $skills );
+		$ratings = $this->parse_ratings( $response, $skills_to_evaluate );
+
+		// Merge auto no_response for untagged skills.
+		foreach ( $auto_no_response as $skill ) {
+			$ratings[ $skill ] = 'no_response';
+		}
 
 		if ( empty( $ratings ) ) {
 			return;
@@ -252,14 +284,13 @@ class Skillsaw_Evaluator {
 
 		// Candidate uploads.
 		foreach ( $candidate_uploads as $upload ) {
-			$skills_str = ! empty( $upload['skills'] )
-				? implode( ', ', $upload['skills'] )
-				: 'not specified by candidate';
-
-			$content[] = array(
-				'type' => 'text',
-				'text' => "The following is the candidate's uploaded work sample: \"{$upload['filename']}\" — candidate indicated it demonstrates: {$skills_str}",
-			);
+			if ( ! empty( $upload['skills'] ) ) {
+				$skills_str = implode( ', ', $upload['skills'] );
+				$label      = "Candidate's work sample: \"{$upload['filename']}\" — evaluate this document only for: {$skills_str}";
+			} else {
+				$label = "Candidate's work sample: \"{$upload['filename']}\" — candidate did not tag any skills for this document; do not use it as evidence for any skill";
+			}
+			$content[] = array( 'type' => 'text', 'text' => $label );
 			$content[] = $this->file_to_content_block( $upload['file_path'], $upload['ext'] );
 		}
 
@@ -319,9 +350,12 @@ class Skillsaw_Evaluator {
 		}
 
 		$text .= "## How to evaluate skills\n";
-		$text .= "- Evaluate each skill independently. A document does not need to demonstrate every skill — only rate what is actually evidenced.\n";
-		$text .= "- If multiple documents are provided and they suggest different ratings for the same skill, apply the better rating. The strongest evidence takes precedence.\n";
-		$text .= "- These ratings are intended to guide human reviewers, not to make hiring decisions. ";
+		$text .= "- Evaluate each skill independently.\n";
+		$text .= "- Only evaluate a skill against a document if the candidate explicitly tagged that skill on that document. ";
+		$text .= "A skill may appear incidentally in a document, but if the candidate did not tag it, do not use that document as evidence for it. ";
+		$text .= "The skills listed below are only those the candidate has opted into being evaluated on — all other skills have already been set to no_response.\n";
+		$text .= "- If multiple documents are tagged for the same skill and suggest different ratings, apply the better rating. The strongest evidence takes precedence.\n";
+		$text .= "- Ratings are intended to guide human reviewers, not to make hiring decisions. ";
 		$text .= "\"Obvious success\" and \"obvious failure\" are signals to accelerate human review, not substitutes for it.\n\n";
 
 		$text .= "## Skills to rate\n";

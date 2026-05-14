@@ -65,7 +65,7 @@ class Skillsaw_Evaluator {
 
 		// Build a user message (may contain PDF document blocks).
 		$content = $this->build_eval_content(
-			$session['role_title'],
+			$session,
 			$skills,
 			$ref_docs,
 			$candidate_uploads,
@@ -237,7 +237,8 @@ class Skillsaw_Evaluator {
 	 * PDFs are passed as base64 document blocks; text files are inlined.
 	 * The evaluation instructions are always the final text block.
 	 */
-	private function build_eval_content( $role_title, array $skills, array $ref_docs, array $candidate_uploads, $transcript ) {
+	private function build_eval_content( array $session, array $skills, array $ref_docs, array $candidate_uploads, $transcript ) {
+		$role_title = $session['role_title'] ?? '';
 		$content = array();
 
 		// Reference documents.
@@ -263,51 +264,68 @@ class Skillsaw_Evaluator {
 		}
 
 		// Instructions text block.
-		$skill_list        = implode( ', ', $skills );
-		$has_ref_docs      = ! empty( $ref_docs );
-		$has_uploads       = ! empty( $candidate_uploads );
-		$has_docs          = $has_ref_docs || $has_uploads;
+		$skill_list   = implode( ', ', $skills );
+		$has_ref_docs = ! empty( $ref_docs );
+		$has_uploads  = ! empty( $candidate_uploads );
+		$has_docs     = $has_ref_docs || $has_uploads;
+		$mode         = $session['mode'] ?? 'upload';
+		$is_critique  = $mode === 'critique';
 
 		$text  = "You are a hiring evaluator assessing a candidate for the role of \"{$role_title}\".\n\n";
 
-		$text .= "## Evaluation philosophy\n";
-		$text .= "The candidate's submitted document(s) are the sole basis for your ratings. ";
-		$text .= "A strong submission should demonstrate each skill on its own merits, without requiring any explanation from the candidate. ";
-		$text .= "Read the documents exactly as a hiring manager would read a cold submission.\n\n";
+		$text .= "## Evaluation approach\n";
+		$text .= "The candidate's submitted document is the deliverable being assessed. ";
+		$text .= "It should demonstrate each skill on its own merits. ";
+		$text .= "Read it as a hiring manager would read a cold submission — no benefit of the doubt for what the candidate might have meant.\n\n";
 
-		if ( $has_docs ) {
+		if ( $is_critique ) {
+			// Critique mode: ref doc is the subject; candidate upload is their written critique.
+			$text .= "## Evaluation path: Critique\n";
+			$text .= "The candidate was asked to write a critique of the reference document provided above. ";
+			$text .= "Their submitted critique is the deliverable. ";
+			$text .= "Assess how well the critique demonstrates each skill — through the depth, accuracy, and quality of their written analysis. ";
+			$text .= "The reference document is the subject of the critique, not a quality benchmark.\n\n";
+		} else {
+			// Upload mode: ref doc sets the standard; candidate upload is their own work.
+			$text .= "## Evaluation path: Work sample\n";
+			$text .= "The candidate submitted their own work sample. ";
+			$text .= "Assess how well it demonstrates each skill relative to the standard set by the reference document. ";
 			if ( $has_ref_docs ) {
-				$text .= "Reference document(s) are provided above to establish the expected standard and context for this role. ";
-				$text .= "Use them to calibrate what \"good\" looks like — not as a checklist to match exactly.\n\n";
-			}
-			if ( $has_uploads ) {
-				$text .= "The candidate's uploaded work sample(s) are provided above. Evaluate them directly.\n\n";
+				$text .= "Use the reference document to calibrate what strong work looks like for this role — not as a template to match exactly.\n\n";
+			} else {
+				$text .= "No reference document was provided; evaluate the work sample on its absolute merits for this role.\n\n";
 			}
 		}
 
+		if ( ! $has_uploads ) {
+			$text .= "No document was submitted by the candidate.\n\n";
+		}
+
 		if ( $transcript ) {
-			$text .= "## Transcript (supplementary context only)\n";
-			if ( $has_docs ) {
-				$text .= "The chat transcript below is provided for context only. ";
-				$text .= "Use it solely to clarify ambiguities in the documents — for example, understanding which skill a document was intended to address. ";
-				$text .= "Do not use the transcript as evidence of a skill. If a skill is not demonstrated in the submitted documents, the transcript cannot substitute for it.\n\n";
+			$text .= "## Chat transcript (supplementary context only)\n";
+			if ( $has_uploads ) {
+				$text .= "Use the transcript solely to resolve ambiguities in the submitted document — ";
+				$text .= "for example, which skill a section was intended to address. ";
+				$text .= "The transcript is not evidence of a skill. A skill absent from the document cannot be rescued by what the candidate said.\n\n";
 			} else {
-				$text .= "No documents were submitted. The transcript is the only available signal. ";
-				$text .= "Rate conservatively — written work is the expected deliverable for this role and its absence should weigh against the candidate.\n\n";
+				$text .= "No document was submitted. The transcript is the only available signal. ";
+				$text .= "Rate conservatively — a written deliverable is the expected submission and its absence should be reflected in the ratings.\n\n";
 			}
 			$text .= $transcript . "\n";
-		} elseif ( ! $has_docs ) {
-			$text .= "No documents and no transcript are available. Rate all skills as no_response.\n\n";
+		}
+
+		if ( ! $has_docs && ! $transcript ) {
+			$text .= "Nothing was submitted. Rate all skills as no_response.\n\n";
 		}
 
 		$text .= "## Skills to rate\n";
 		$text .= "{$skill_list}\n\n";
 
 		$text .= "## Rating scale\n";
-		$text .= "- obvious_success: The document clearly and convincingly demonstrates this skill at or above the expected level\n";
-		$text .= "- provided_response: The document shows some evidence of this skill but not at a distinguishing level\n";
-		$text .= "- no_response: The document contains no meaningful evidence of this skill\n";
-		$text .= "- obvious_failure: The document contains work that actively contradicts or falls well below the expected standard for this skill\n\n";
+		$text .= "- obvious_success: The submission clearly and convincingly demonstrates this skill\n";
+		$text .= "- provided_response: The submission shows some evidence of this skill but not at a distinguishing level\n";
+		$text .= "- no_response: The submission contains no meaningful evidence of this skill\n";
+		$text .= "- obvious_failure: The submission actively contradicts or falls well below the expected standard for this skill\n\n";
 
 		$text .= "## Output\n";
 		$text .= "Respond with a JSON object only — no explanation, no markdown fences. Use the exact skill names as keys:\n";

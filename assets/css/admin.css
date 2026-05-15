@@ -135,7 +135,7 @@
 }
 
 .skillsaw-candidates-list-head {
-	grid-template-columns: 220px 180px 1fr 100px 90px 120px;
+	grid-template-columns: 200px 160px 1fr 88px 88px 120px 48px;
 }
 
 .skillsaw-roles-list { border: 1px solid #dcdcde; border-radius: 3px; }
@@ -234,6 +234,49 @@
 	color: #1d2327;
 }
 
+/* ── Critique upload label ──────────────────────────────────────────────────── */
+.skillsaw-critique-upload-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 0 8px;
+	height: 28px;
+	font-size: 13px;
+	font-weight: 400;
+	border: 1px solid #c3c4c7;
+	border-radius: 3px;
+	cursor: pointer;
+	background: #fff;
+	color: #1d2327;
+	line-height: 1;
+}
+.skillsaw-critique-upload-label:hover { border-color: #50575e; }
+.skillsaw-hidden-file-input { display: none; }
+
+/* ── Suggest mistakes modal ─────────────────────────────────────────────────── */
+.skillsaw-suggestions-body { padding: 4px 0 16px; }
+.skillsaw-suggestions-intro { font-size: 13px; color: #50575e; margin-bottom: 12px; }
+.skillsaw-suggestions-text {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+	font-size: 13px;
+	line-height: 1.6;
+	white-space: pre-wrap;
+	word-break: break-word;
+	background: #f6f7f7;
+	border: 1px solid #dcdcde;
+	border-radius: 3px;
+	padding: 12px 16px;
+	max-height: 60vh;
+	overflow-y: auto;
+}
+.skillsaw-suggestions-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	padding-top: 12px;
+	border-top: 1px solid #dcdcde;
+}
+
 .skillsaw-upload-area { margin-top: 10px; }
 .skillsaw-upload-label {
 	display: inline-block;
@@ -251,9 +294,9 @@
 .skillsaw-candidates-list { border: 1px solid #dcdcde; border-radius: 3px; }
 .skillsaw-candidate-row {
 	display: grid;
-	grid-template-columns: 220px 180px 1fr 100px 90px 120px;
-	gap: 16px;
-	align-items: center;
+	grid-template-columns: 200px 160px 1fr 88px 88px 120px 48px;
+	gap: 12px;
+	align-items: start;
 	padding: 12px 16px;
 	border-bottom: 1px solid #dcdcde;
 	background: #fff;
@@ -274,8 +317,8 @@
 .skillsaw-candidate-email { font-size: 12px; color: #8c8f94; }
 .skillsaw-candidate-role { font-size: 13px; color: #1d2327; }
 .skillsaw-candidate-role small { display: block; font-size: 11px; color: #8c8f94; }
-.skillsaw-candidate-skills { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0; }
-.skillsaw-candidate-actions { display: flex; gap: 10px; align-items: flex-start; }
+.skillsaw-candidate-skills { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0; overflow: hidden; max-height: calc( 3 * ( 22px + 6px ) ); }
+.skillsaw-candidate-actions { display: flex; gap: 10px; align-items: flex-start; padding-top: 2px; }
 .skillsaw-duration { font-size: 12px; color: #8c8f94; }
 
 /* ── Transcript modal ───────────────────────────────────────────────────── */
@@ -351,15 +394,50 @@
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
-	align-self: center;
+	padding-top: 2px;
 }
 
 .skillsaw-candidate-actions {
-	align-self: center;
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
 	align-items: flex-start;
+	padding-top: 2px;
+}
+
+.skillsaw-candidate-archive-col {
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	padding-top: 2px;
+}
+
+.skillsaw-archive-btn {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	background: none;
+	border: none;
+	padding: 4px 2px;
+	cursor: pointer;
+	color: #a7aaad;
+	font-size: 10px;
+	line-height: 1.2;
+	border-radius: 3px;
+	transition: color 0.1s;
+}
+
+.skillsaw-archive-btn:hover {
+	color: #d63638;
+}
+
+.skillsaw-archive-btn--restore {
+	color: #a7aaad;
+}
+
+.skillsaw-archive-btn--restore:hover {
+	color: #00a32a;
 }
 
 .skillsaw-gh-error {
@@ -382,19 +460,34 @@
 
 .skillsaw-pdf-btn {
 	background: none;
-	border: 1px solid #8c8f94;
-	border-radius: 3px;
-	padding: 2px 7px;
+	border: none;
+	padding: 0;
 	font-size: 12px;
 	color: #50575e;
 	cursor: pointer;
 	line-height: 1.6;
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
 }
 
-.skillsaw-pdf-btn:hover {
-	border-color: #1e1e1e;
-	color: #1e1e1e;
+.skillsaw-pdf-btn:hover { color: #1e1e1e; }
+.skillsaw-pdf-btn:hover .skillsaw-pdf-badge { border-color: #a03030; color: #a03030; }
+
+.skillsaw-pdf-badge {
+	display: inline-block;
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.03em;
+	color: #b44;
+	border: 1.5px solid #c66;
+	border-radius: 2px 4px 2px 2px;
+	padding: 0px 3px 0px 3px;
+	line-height: 1.5;
+	position: relative;
 }
+
+.skillsaw-archived-badge { color: #a7aaad; font-style: italic; }
 
 /* ── File card (enhanced) ───────────────────────────────────────────────── */
 .skillsaw-file-card {
@@ -482,4 +575,46 @@
 .skillsaw-rating-skill {
 	flex: 1;
 	color: #1d2327;
+}
+
+/* ── About tab ───────────────────────────────────────────────────────────── */
+.skillsaw-about {
+	margin-top: 24px;
+}
+.skillsaw-about-body {
+	max-width: 680px;
+	font-size: 14px;
+	line-height: 1.7;
+	color: #1d2327;
+}
+.skillsaw-about-body h2 {
+	font-size: 16px;
+	font-weight: 600;
+	margin: 28px 0 8px;
+	color: #1d2327;
+}
+.skillsaw-about-body h2:first-child {
+	margin-top: 0;
+}
+.skillsaw-about-body p,
+.skillsaw-about-body ul {
+	margin: 0 0 14px;
+}
+.skillsaw-about-body ul {
+	padding-left: 20px;
+	list-style: disc;
+}
+.skillsaw-about-body li {
+	margin-bottom: 4px;
+}
+.skillsaw-about-feedback {
+	margin-top: 28px;
+	padding-top: 16px;
+	border-top: 1px solid #dcdcde;
+	color: #50575e;
+}
+.skillsaw-about-version {
+	font-size: 12px;
+	color: #787c82;
+	margin: 0 0 20px;
 }

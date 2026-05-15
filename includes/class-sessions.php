@@ -161,10 +161,13 @@ class Skillsaw_Sessions {
 	public function expire_old_sessions() {
 		global $wpdb;
 		$wpdb->query(
-			"UPDATE {$wpdb->prefix}skillsaw_sessions
-			 SET status = 'expired'
-			 WHERE status = 'in_progress'
-			 AND started_at < DATE_SUB( NOW(), INTERVAL 4 HOUR )"
+			$wpdb->prepare(
+				"UPDATE {$wpdb->prefix}skillsaw_sessions
+				 SET status = 'expired'
+				 WHERE status = %s
+				 AND started_at < DATE_SUB( NOW(), INTERVAL 4 HOUR )",
+				'in_progress'
+			)
 		);
 	}
 

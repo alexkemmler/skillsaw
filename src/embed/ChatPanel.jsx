@@ -131,17 +131,28 @@ function SkillPickerMessage( { roleSkills, onConfirm } ) {
 
 // ─── Document critique card ───────────────────────────────────────────────────
 
-function CritiqueDocCard( { docName, critiqueText, instructions } ) {
+function CritiqueDocCard( { docName, critiqueText, docUrl, docExt, instructions } ) {
 	const [ expanded, setExpanded ] = useState( false );
+	const isPdf = docExt === 'pdf';
 
 	const handleDownload = () => {
-		const blob = new Blob( [ critiqueText ], { type: 'text/plain' } );
-		const url  = URL.createObjectURL( blob );
-		const a    = document.createElement( 'a' );
-		a.href     = url;
-		a.download = ( docName || 'document' ) + '.txt';
-		a.click();
-		URL.revokeObjectURL( url );
+		if ( docUrl ) {
+			const a    = document.createElement( 'a' );
+			a.href     = docUrl;
+			a.download = docName || 'document';
+			a.target   = '_blank';
+			a.click();
+			return;
+		}
+		if ( critiqueText ) {
+			const blob = new Blob( [ critiqueText ], { type: 'text/plain' } );
+			const url  = URL.createObjectURL( blob );
+			const a    = document.createElement( 'a' );
+			a.href     = url;
+			a.download = ( docName || 'document' ) + '.txt';
+			a.click();
+			URL.revokeObjectURL( url );
+		}
 	};
 
 	return (
@@ -156,24 +167,54 @@ function CritiqueDocCard( { docName, critiqueText, instructions } ) {
 						</div>
 					</div>
 					<div className="sw-doc-card-actions">
-						<button
-							type="button"
-							className="sw-doc-action-btn"
-							onClick={ () => setExpanded( ( v ) => ! v ) }
-						>
-							{ expanded ? 'Collapse' : 'Read document' }
-						</button>
-						{ critiqueText && (
+						{ docUrl && (
+							<a
+								href={ docUrl }
+								target="_blank"
+								rel="noreferrer"
+								className="sw-doc-action-btn"
+							>
+								Open in new tab ↗
+							</a>
+						) }
+						{ docUrl && isPdf && (
+							<button
+								type="button"
+								className="sw-doc-action-btn"
+								onClick={ () => setExpanded( ( v ) => ! v ) }
+							>
+								{ expanded ? 'Collapse' : 'Read inline' }
+							</button>
+						) }
+						{ ! docUrl && critiqueText && (
+							<button
+								type="button"
+								className="sw-doc-action-btn"
+								onClick={ () => setExpanded( ( v ) => ! v ) }
+							>
+								{ expanded ? 'Collapse' : 'Read document' }
+							</button>
+						) }
+						{ ( docUrl || critiqueText ) && (
 							<button
 								type="button"
 								className="sw-doc-action-btn"
 								onClick={ handleDownload }
 							>
-								Download .txt
+								Download
 							</button>
 						) }
 					</div>
-					{ expanded && critiqueText && (
+					{ expanded && docUrl && isPdf && (
+						<div className="sw-doc-pdf-embed">
+							<iframe
+								src={ docUrl }
+								title={ docName }
+								className="sw-doc-pdf-iframe"
+							/>
+						</div>
+					) }
+					{ expanded && ! docUrl && critiqueText && (
 						<div className="sw-doc-full-text">
 							<pre>{ critiqueText }</pre>
 						</div>
@@ -337,6 +378,8 @@ export default function ChatPanel( { roleId, active, hasCritique, roleTitle, rol
 					type:         'critique_doc',
 					docName:      data.critique_doc_name,
 					critiqueText: data.critique_text,
+					docUrl:       data.critique_doc_url  || null,
+					docExt:       data.critique_doc_ext  || null,
 					instructions: data.candidate_note,
 				} ] );
 			}
@@ -517,6 +560,8 @@ export default function ChatPanel( { roleId, active, hasCritique, roleTitle, rol
 					key={ i }
 					docName={ msg.docName }
 					critiqueText={ msg.critiqueText }
+					docUrl={ msg.docUrl }
+					docExt={ msg.docExt }
 					instructions={ msg.instructions }
 				/>
 			);
@@ -669,8 +714,6 @@ export default function ChatPanel( { roleId, active, hasCritique, roleTitle, rol
 				) }
 
 				{ ( isSending || isUploading ) && <TypingIndicator /> }
-
-				<div ref={ ( el ) => { if ( el ) el.scrollIntoView( { behavior: 'smooth' } ); } } />
 			</div>
 
 			{ /* Complete strip */ }

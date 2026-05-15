@@ -60,6 +60,7 @@ class Skillsaw_Admin {
 			array(
 				'nonce'   => wp_create_nonce( 'wp_rest' ),
 				'rootUrl' => rest_url(),
+				'version' => SKILLSAW_VERSION,
 			)
 		);
 
@@ -87,8 +88,20 @@ class Skillsaw_Admin {
 		}
 		check_admin_referer( 'skillsaw_settings' );
 
-		$fields = array( 'anthropic_key', 'greenhouse_key', 'greenhouse_board_token', 'greenhouse_user_id' );
-		foreach ( $fields as $field ) {
+		$masked_fields  = array( 'anthropic_key', 'greenhouse_key' );
+		$plain_fields   = array( 'greenhouse_board_token', 'greenhouse_user_id' );
+
+		foreach ( $masked_fields as $field ) {
+			if ( isset( $_POST[ $field ] ) ) {
+				$value = sanitize_text_field( wp_unslash( $_POST[ $field ] ) );
+				// Only update if the submitted value is not the masked placeholder.
+				if ( $value !== '••••••••' ) {
+					Skillsaw_Settings::set( $field, $value );
+				}
+			}
+		}
+
+		foreach ( $plain_fields as $field ) {
 			if ( isset( $_POST[ $field ] ) ) {
 				Skillsaw_Settings::set( $field, sanitize_text_field( wp_unslash( $_POST[ $field ] ) ) );
 			}

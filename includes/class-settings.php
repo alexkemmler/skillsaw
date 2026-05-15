@@ -10,7 +10,7 @@ class Skillsaw_Settings {
 	}
 
 	public static function set( $key, $value ) {
-		update_option( 'skillsaw_' . $key, $value );
+		update_option( 'skillsaw_' . $key, $value, false );
 	}
 
 	public static function get_anthropic_key() {

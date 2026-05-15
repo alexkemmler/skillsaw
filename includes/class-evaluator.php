@@ -63,37 +63,10 @@ class Skillsaw_Evaluator {
 		$ref_docs          = $this->get_reference_docs( $session['role_id'] );
 		$candidate_uploads = $this->get_candidate_uploads( $session_id );
 
-		// Determine which skills the candidate explicitly tagged on at least one
-		// document. Skills not tagged on any document are automatically no_response —
-		// the candidate chose not to be evaluated on them.
-		$tagged_skills = array();
-		foreach ( $candidate_uploads as $upload ) {
-			foreach ( ( $upload['skills'] ?: array() ) as $skill ) {
-				$tagged_skills[ $skill ] = true;
-			}
-		}
-
-		$skills_to_evaluate = array_values( array_filter(
-			$skills,
-			fn( $s ) => isset( $tagged_skills[ $s ] )
-		) );
-
-		$auto_no_response = array_values( array_filter(
-			$skills,
-			fn( $s ) => ! isset( $tagged_skills[ $s ] )
-		) );
-
-		// If nothing was tagged, fall back to evaluating all skills (e.g. no
-		// uploads at all — transcript-only session).
-		if ( empty( $skills_to_evaluate ) ) {
-			$skills_to_evaluate = $skills;
-			$auto_no_response   = array();
-		}
-
 		// Build a user message (may contain PDF document blocks).
 		$content = $this->build_eval_content(
 			$session,
-			$skills_to_evaluate,
+			$skills,
 			$ref_docs,
 			$candidate_uploads,
 			$transcript
@@ -111,12 +84,7 @@ class Skillsaw_Evaluator {
 			return;
 		}
 
-		$ratings = $this->parse_ratings( $response, $skills_to_evaluate );
-
-		// Merge auto no_response for untagged skills.
-		foreach ( $auto_no_response as $skill ) {
-			$ratings[ $skill ] = 'no_response';
-		}
+		$ratings = $this->parse_ratings( $response, $skills );
 
 		if ( empty( $ratings ) ) {
 			return;
@@ -270,8 +238,13 @@ class Skillsaw_Evaluator {
 	 * The evaluation instructions are always the final text block.
 	 */
 	private function build_eval_content( array $session, array $skills, array $ref_docs, array $candidate_uploads, $transcript ) {
-		$role_title = $session['role_title'] ?? '';
-		$content = array();
+		$role_title  = $session['role_title'] ?? '';
+		$mode        = $session['mode'] ?? 'upload';
+		$is_critique = $mode === 'critique';
+		$has_ref_docs = ! empty( $ref_docs );
+		$has_uploads  = ! empty( $candidate_uploads );
+		$has_docs     = $has_ref_docs || $has_uploads;
+		$content      = array();
 
 		// Reference documents.
 		foreach ( $ref_docs as $doc ) {
@@ -286,119 +259,56 @@ class Skillsaw_Evaluator {
 		foreach ( $candidate_uploads as $upload ) {
 			if ( ! empty( $upload['skills'] ) ) {
 				$skills_str = implode( ', ', $upload['skills'] );
-				$label      = "Candidate's work sample: \"{$upload['filename']}\" — evaluate this document only for: {$skills_str}";
+				$label      = "Candidate's work sample: \"{$upload['filename']}\" — candidate indicated this document demonstrates: {$skills_str}";
 			} else {
-				$label = "Candidate's work sample: \"{$upload['filename']}\" — candidate did not tag any skills for this document; do not use it as evidence for any skill";
+				$label = "Candidate's work sample: \"{$upload['filename']}\"";
 			}
 			$content[] = array( 'type' => 'text', 'text' => $label );
 			$content[] = $this->file_to_content_block( $upload['file_path'], $upload['ext'] );
 		}
 
-		// Instructions text block.
-		$skill_list   = implode( ', ', $skills );
-		$has_ref_docs = ! empty( $ref_docs );
-		$has_uploads  = ! empty( $candidate_uploads );
-		$has_docs     = $has_ref_docs || $has_uploads;
-		$mode         = $session['mode'] ?? 'upload';
-		$is_critique  = $mode === 'critique';
-
-		$text  = "You are a hiring evaluator assessing a candidate for the role of \"{$role_title}\".\n\n";
-
-		$text .= "## Evaluation approach\n";
-		$text .= "The candidate's submitted document is the deliverable being assessed. ";
-		$text .= "It should demonstrate each skill on its own merits. ";
-		$text .= "Read it as a hiring manager would read a cold submission — no benefit of the doubt for what the candidate might have meant.\n\n";
-
-		if ( $is_critique ) {
-			// Critique mode: ref doc is the subject; candidate upload is their written critique.
-			$text .= "## Evaluation path: Critique\n";
-			$text .= "The candidate was asked to write a critique of the reference document provided above. ";
-			$text .= "Their submitted critique is the deliverable. ";
-			$text .= "Assess how well the critique demonstrates each skill — through the depth, accuracy, and quality of their written analysis. ";
-			$text .= "The reference document is the subject of the critique, not a quality benchmark.\n\n";
-		} else {
-			// Upload mode: ref doc sets the standard; candidate upload is their own work.
-			$text .= "## Evaluation path: Work sample\n";
-			$text .= "The candidate submitted their own work sample. ";
-			$text .= "Assess how well it demonstrates each skill relative to the standard set by the reference document. ";
-			if ( $has_ref_docs ) {
-				$text .= "Use the reference document to calibrate what strong work looks like for this role — not as a template to match exactly.\n\n";
-			} else {
-				$text .= "No reference document was provided; evaluate the work sample on its absolute merits for this role.\n\n";
-			}
+		// Load the prompt template.
+		$template_file = $is_critique
+			? SKILLSAW_PLUGIN_DIR . 'includes/eval-prompt-critique.md'
+			: SKILLSAW_PLUGIN_DIR . 'includes/eval-prompt-upload.md';
+		$text = file_get_contents( $template_file );
+		if ( $text === false ) {
+			error_log( 'Skillsaw: missing evaluator prompt template: ' . $template_file );
+			return array();
 		}
 
+		// Build context sections (structural — not editable prose).
+		$context = '';
 		if ( ! $has_uploads ) {
-			$text .= "No document was submitted by the candidate.\n\n";
+			$context .= "No document was submitted by the candidate.\n\n";
 		}
-
 		if ( $transcript ) {
-			$text .= "## Chat transcript (supplementary context only)\n";
+			$context .= "## Chat transcript (supplementary context only)\n";
 			if ( $has_uploads ) {
-				$text .= "Use the transcript solely to resolve ambiguities in the submitted document — ";
-				$text .= "for example, which skill a section was intended to address. ";
-				$text .= "The transcript is not evidence of a skill. A skill absent from the document cannot be rescued by what the candidate said.\n\n";
+				$context .= "Use the transcript solely to resolve ambiguities in the submitted document — ";
+				$context .= "for example, which skill a section was intended to address. ";
+				$context .= "The transcript is not evidence of a skill. A skill absent from the document cannot be rescued by what the candidate said.\n\n";
 			} else {
-				$text .= "No document was submitted. The transcript is the only available signal. ";
-				$text .= "Rate conservatively — a written deliverable is the expected submission and its absence should be reflected in the ratings.\n\n";
+				$context .= "No document was submitted. The transcript is the only available signal. ";
+				$context .= "Rate conservatively — a written deliverable is the expected submission and its absence should be reflected in the ratings.\n\n";
 			}
-			$text .= $transcript . "\n";
+			$context .= $transcript . "\n";
 		}
-
 		if ( ! $has_docs && ! $transcript ) {
-			$text .= "Nothing was submitted. Rate all skills as no_response.\n\n";
+			$context .= "Nothing was submitted. Rate all skills as no_response.\n\n";
 		}
 
-		$text .= "## How to evaluate skills\n";
-		$text .= "- Evaluate each skill independently.\n";
-		$text .= "- Only evaluate a skill against a document if the candidate explicitly tagged that skill on that document. ";
-		$text .= "A skill may appear incidentally in a document, but if the candidate did not tag it, do not use that document as evidence for it. ";
-		$text .= "The skills listed below are only those the candidate has opted into being evaluated on — all other skills have already been set to no_response.\n";
-		$text .= "- If multiple documents are tagged for the same skill and suggest different ratings, apply the better rating. The strongest evidence takes precedence.\n";
-		$text .= "- Ratings are intended to guide human reviewers, not to make hiring decisions. ";
-		$text .= "\"Obvious success\" and \"obvious failure\" are signals to accelerate human review, not substitutes for it.\n\n";
+		// Calibration note varies by whether a reference doc exists (upload path only).
+		$calibration = $has_ref_docs
+			? 'Use the reference document to calibrate what strong work looks like for this role — not as a template to match exactly.'
+			: 'No reference document was provided; evaluate the work sample on its absolute merits for this role.';
 
-		$text .= "## Skills to rate\n";
-		$text .= "{$skill_list}\n\n";
-
-		if ( $is_critique ) {
-			$text .= "## Rating scale — Critique path\n";
-			$text .= "\"Senior professional level\" means the depth, accuracy, and analytical quality of critique a senior practitioner in this field would produce.\n\n";
-			$text .= "- obvious_success: The critique leaves no doubt that the candidate has a high level of ability in this skill. ";
-			$text .= "The analysis is sophisticated and demonstrates the depth of understanding one would expect from someone capable of producing the reference document themselves. ";
-			$text .= "The skill is compellingly evidenced through the quality of the written analysis.\n\n";
-			$text .= "- provided_response: The skill is plausibly demonstrated through the critique, but there is room for doubt as to whether it reaches senior professional level. ";
-			$text .= "There is evidence of competence but the volume or character of the analysis falls short of definitively reaching that level. ";
-			$text .= "The critique must be at least marginally competent — not necessarily impressive, but not incompetent.\n\n";
-			$text .= "- no_response: No attempt has been made to address this skill in the critique, or the critique completely lacks content that could possibly demonstrate it.\n\n";
-			$text .= "- obvious_failure: An attempt was made to demonstrate this skill through the critique, but it revealed dramatic incompetence — ";
-			$text .= "for example, fundamental misunderstanding of the concepts being critiqued, catastrophically poor analytical quality, glaring factual errors, ";
-			$text .= "major logical contradictions, or flagrant ignorance of basic concepts in the field. ";
-			$text .= "The bar is high: the critique must make it impossible to believe a professional in the field produced it. ";
-			$text .= "Do not use this rating simply because the critique is weak or thin — use no_response or provided_response instead.\n\n";
-		} else {
-			$text .= "## Rating scale — Work sample path\n";
-			$text .= "\"Senior professional level\" means the level of skill demonstrated in the reference document for this role.\n\n";
-			$text .= "- obvious_success: The document leaves no doubt that the candidate has a high level of ability in this skill. ";
-			$text .= "It demonstrates competence, sophistication, and experience at or beyond senior professional level. ";
-			$text .= "The bottom line: could this candidate plausibly have produced the reference document themselves? If clearly yes, use this rating.\n\n";
-			$text .= "- provided_response: The skill is plausibly demonstrated, but there is room for doubt as to whether it reaches the level of the reference document. ";
-			$text .= "There may be evidence of senior professional level work, but the volume or character of that evidence falls short of definitively reaching or surpassing the reference. ";
-			$text .= "The work must be at least marginally competent — not necessarily impressive, but not incompetent.\n\n";
-			$text .= "- no_response: No documents were provided to demonstrate this skill, or documents were provided but completely lack content that could possibly demonstrate it. ";
-			$text .= "Use this when no apparent attempt has been made to demonstrate the skill. ";
-			$text .= "Do not use this when an attempt was made but failed — use obvious_failure for that.\n\n";
-			$text .= "- obvious_failure: An attempt was made to demonstrate this skill, but it demonstrated dramatic incompetence. ";
-			$text .= "This includes: stubborn misunderstanding of how the skill works, catastrophically low quality work, glaring errors, major logical contradictions, ";
-			$text .= "aggressively incorrect positions, decades-out-of-date practices, or flagrant ignorance of basic concepts. ";
-			$text .= "The bar is high: the document must make it impossible to believe a professional in the field produced it. ";
-			$text .= "This is not simply a failure to reach a mediocre standard — it is overwhelming evidence that the candidate has no idea what they are doing with respect to this skill. ";
-			$text .= "If irrelevant work was submitted for a skill, use no_response, not obvious_failure.\n\n";
-		}
-
-		$text .= "## Output\n";
-		$text .= "Respond with a JSON object only — no explanation, no markdown fences. Use the exact skill names as keys:\n";
-		$text .= "{\"skill_name\": \"rating\", ...}";
+		// Substitute all placeholders.
+		$text = str_replace(
+			array( '{{ROLE_TITLE}}', '{{SKILL_LIST}}', '{{CONTEXT_SECTIONS}}', '{{CALIBRATION_NOTE}}' ),
+			array( $role_title, implode( ', ', $skills ), $context, $calibration ),
+			$text
+		);
 
 		$content[] = array( 'type' => 'text', 'text' => $text );
 

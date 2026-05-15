@@ -64,6 +64,16 @@ class Skillsaw_API {
 			'callback'            => array( $this, 'generate_critique' ),
 			'permission_callback' => array( $this, 'admin_permission' ),
 		) );
+		register_rest_route( self::NAMESPACE, '/roles/(?P<role_id>\d+)/documents/(?P<id>\d+)/suggest-mistakes', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'suggest_mistakes' ),
+			'permission_callback' => array( $this, 'admin_permission' ),
+		) );
+		register_rest_route( self::NAMESPACE, '/roles/(?P<role_id>\d+)/documents/(?P<id>\d+)/critique-upload', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'upload_critique_doc' ),
+			'permission_callback' => array( $this, 'admin_permission' ),
+		) );
 
 		// Settings
 		register_rest_route( self::NAMESPACE, '/settings', array(
@@ -86,6 +96,16 @@ class Skillsaw_API {
 			'permission_callback' => array( $this, 'admin_permission' ),
 		) );
 
+		register_rest_route( self::NAMESPACE, '/candidates/(?P<id>\d+)/archive', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'archive_candidate' ),
+			'permission_callback' => array( $this, 'admin_permission' ),
+		) );
+		register_rest_route( self::NAMESPACE, '/candidates/(?P<id>\d+)/unarchive', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'unarchive_candidate' ),
+			'permission_callback' => array( $this, 'admin_permission' ),
+		) );
 		register_rest_route( self::NAMESPACE, '/candidates/(?P<id>\d+)/transcript', array(
 			'methods'             => WP_REST_Server::READABLE,
 			'callback'            => array( $this, 'get_transcript' ),
@@ -340,10 +360,32 @@ class Skillsaw_API {
 
 	public function delete_role( $request ) {
 		global $wpdb;
+		$role_id = (int) $request['id'];
 
-		$wpdb->delete( "{$wpdb->prefix}skillsaw_roles", array( 'id' => $request['id'] ) );
-		$wpdb->delete( "{$wpdb->prefix}skillsaw_skills", array( 'role_id' => $request['id'] ) );
-		$wpdb->delete( "{$wpdb->prefix}skillsaw_documents", array( 'role_id' => $request['id'] ) );
+		// Delete media attachments for all documents belonging to this role.
+		$attachment_ids = $wpdb->get_col( $wpdb->prepare(
+			"SELECT attachment_id FROM {$wpdb->prefix}skillsaw_documents
+			 WHERE role_id = %d AND attachment_id IS NOT NULL",
+			$role_id
+		) );
+		foreach ( $attachment_ids as $att_id ) {
+			wp_delete_attachment( (int) $att_id, true );
+		}
+
+		// Cascade-delete sessions, messages, and ratings.
+		$session_ids = $wpdb->get_col( $wpdb->prepare(
+			"SELECT id FROM {$wpdb->prefix}skillsaw_sessions WHERE role_id = %d",
+			$role_id
+		) );
+		foreach ( $session_ids as $sid ) {
+			$wpdb->delete( "{$wpdb->prefix}skillsaw_messages", array( 'session_id' => (int) $sid ) );
+			$wpdb->delete( "{$wpdb->prefix}skillsaw_skill_ratings", array( 'session_id' => (int) $sid ) );
+		}
+
+		$wpdb->delete( "{$wpdb->prefix}skillsaw_sessions", array( 'role_id' => $role_id ) );
+		$wpdb->delete( "{$wpdb->prefix}skillsaw_documents", array( 'role_id' => $role_id ) );
+		$wpdb->delete( "{$wpdb->prefix}skillsaw_skills", array( 'role_id' => $role_id ) );
+		$wpdb->delete( "{$wpdb->prefix}skillsaw_roles", array( 'id' => $role_id ) );
 
 		return rest_ensure_response( array( 'deleted' => true ) );
 	}
@@ -357,6 +399,12 @@ class Skillsaw_API {
 
 		if ( empty( $_FILES['file'] ) ) {
 			return new WP_Error( 'no_file', 'No file uploaded.', array( 'status' => 400 ) );
+		}
+
+		$allowed_exts = array( 'pdf', 'docx', 'doc', 'txt', 'md' );
+		$ext_check    = strtolower( pathinfo( $_FILES['file']['name'], PATHINFO_EXTENSION ) );
+		if ( ! in_array( $ext_check, $allowed_exts, true ) ) {
+			return new WP_Error( 'invalid_type', 'Unsupported file type.', array( 'status' => 400 ) );
 		}
 
 		require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -509,6 +557,155 @@ class Skillsaw_API {
 		) );
 	}
 
+	public function suggest_mistakes( $request ) {
+		global $wpdb;
+
+		$doc = $wpdb->get_row( $wpdb->prepare(
+			"SELECT d.*, r.title as role_title FROM {$wpdb->prefix}skillsaw_documents d
+			 JOIN {$wpdb->prefix}skillsaw_roles r ON r.id = d.role_id
+			 WHERE d.id = %d AND d.role_id = %d",
+			$request['id'],
+			$request['role_id']
+		) );
+
+		if ( ! $doc ) {
+			return new WP_Error( 'not_found', 'Document not found.', array( 'status' => 404 ) );
+		}
+
+		$file_path = get_attached_file( $doc->attachment_id );
+		if ( ! $file_path || ! file_exists( $file_path ) ) {
+			return new WP_Error( 'unreadable', 'Could not find document file.', array( 'status' => 500 ) );
+		}
+
+		$ext       = strtolower( pathinfo( $file_path, PATHINFO_EXTENSION ) );
+		$skills    = json_decode( $doc->skills, true ) ?: array();
+		$skill_str = implode( ', ', $skills );
+
+		$instruction = "You are helping a recruiter prepare a document for a skills assessment exercise. Candidates applying for the role of \"{$doc->role_title}\" will be asked to critique this document. The skills being assessed are: {$skill_str}.\n\nAnalyze this document and suggest 6–8 specific, realistic weaknesses that a recruiter could manually introduce into the document. These weaknesses should:\n- Be non-obvious enough that only a skilled professional would notice them\n- Be directly relevant to the skills being assessed\n- Feel like genuine oversights or misjudgements, not obvious errors\n- Vary in type: strategic blind spots, flawed assumptions, missed considerations, subtle factual errors, questionable decisions\n\nFor each suggestion provide:\n1. Location — where in the document to make the change (section name, chart, paragraph, etc.)\n2. Current content — briefly quote or describe what is there now\n3. Suggested change — exactly what to replace it with or add\n4. Why a strong candidate would catch it — what the correct approach is and why this flaw matters\n\nFormat as a numbered list. Be specific enough that someone without deep domain expertise could make the edit themselves.";
+
+		require_once SKILLSAW_PLUGIN_DIR . 'includes/class-claude.php';
+		$claude = new Skillsaw_Claude();
+
+		if ( $ext === 'pdf' ) {
+			$user_content = array(
+				array(
+					'type'   => 'document',
+					'source' => array(
+						'type'       => 'base64',
+						'media_type' => 'application/pdf',
+						'data'       => base64_encode( file_get_contents( $file_path ) ),
+					),
+				),
+				array( 'type' => 'text', 'text' => $instruction ),
+			);
+			$response = $claude->chat(
+				array( array( 'role' => 'user', 'content' => $user_content ) ),
+				'',
+				4096,
+				'claude-opus-4-7'
+			);
+		} elseif ( $ext === 'docx' ) {
+			$text = $this->extract_docx_text( $file_path );
+			if ( ! $text ) {
+				return new WP_Error( 'unreadable', 'Could not extract text from the DOCX file.', array( 'status' => 500 ) );
+			}
+			$response = $claude->complete( "Document:\n\n{$text}\n\n---\n\n{$instruction}", 4096, 'claude-opus-4-7' );
+		} elseif ( in_array( $ext, array( 'txt', 'md' ), true ) ) {
+			$text     = file_get_contents( $file_path );
+			$response = $claude->complete( "Document:\n\n{$text}\n\n---\n\n{$instruction}", 4096, 'claude-opus-4-7' );
+		} else {
+			return new WP_Error( 'unsupported_type', 'Only PDF, DOCX, TXT, and MD documents are supported.', array( 'status' => 400 ) );
+		}
+
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		return rest_ensure_response( array( 'suggestions' => $response ) );
+	}
+
+	public function upload_critique_doc( $request ) {
+		global $wpdb;
+
+		$doc = $wpdb->get_row( $wpdb->prepare(
+			"SELECT * FROM {$wpdb->prefix}skillsaw_documents WHERE id = %d AND role_id = %d AND is_critique_version = 0",
+			$request['id'],
+			$request['role_id']
+		) );
+
+		if ( ! $doc ) {
+			return new WP_Error( 'not_found', 'Document not found.', array( 'status' => 404 ) );
+		}
+
+		if ( empty( $_FILES['file'] ) ) {
+			return new WP_Error( 'no_file', 'No file uploaded.', array( 'status' => 400 ) );
+		}
+
+		$allowed_exts = array( 'pdf', 'docx', 'doc', 'txt', 'md' );
+		$ext_check    = strtolower( pathinfo( $_FILES['file']['name'], PATHINFO_EXTENSION ) );
+		if ( ! in_array( $ext_check, $allowed_exts, true ) ) {
+			return new WP_Error( 'invalid_type', 'Unsupported file type.', array( 'status' => 400 ) );
+		}
+
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/media.php';
+		require_once ABSPATH . 'wp-admin/includes/image.php';
+
+		$attachment_id = media_handle_upload( 'file', 0 );
+		if ( is_wp_error( $attachment_id ) ) {
+			return $attachment_id;
+		}
+
+		$file_path = get_attached_file( $attachment_id );
+		$filename  = basename( $file_path );
+		$ext       = strtolower( pathinfo( $filename, PATHINFO_EXTENSION ) );
+
+		$text = null;
+		if ( $ext === 'docx' ) {
+			$text = $this->extract_docx_text( $file_path ) ?: null;
+		} elseif ( in_array( $ext, array( 'txt', 'md' ), true ) ) {
+			$text = file_get_contents( $file_path ) ?: null;
+		}
+
+		// Delete any existing critique version (and its attachment) for this parent document.
+		$existing = $wpdb->get_row( $wpdb->prepare(
+			"SELECT * FROM {$wpdb->prefix}skillsaw_documents WHERE parent_document_id = %d AND is_critique_version = 1",
+			$doc->id
+		) );
+		if ( $existing ) {
+			if ( $existing->attachment_id ) {
+				wp_delete_attachment( $existing->attachment_id, true );
+			}
+			$wpdb->delete( "{$wpdb->prefix}skillsaw_documents", array( 'id' => $existing->id ) );
+		}
+
+		$name = pathinfo( $doc->name, PATHINFO_FILENAME ) . ' — critique.' . $ext;
+
+		$wpdb->insert( "{$wpdb->prefix}skillsaw_documents", array(
+			'role_id'             => $doc->role_id,
+			'attachment_id'       => $attachment_id,
+			'name'                => $name,
+			'type'                => $ext,
+			'skills'              => $doc->skills,
+			'is_critique_version' => 1,
+			'parent_document_id'  => $doc->id,
+			'critique_text'       => $text,
+		) );
+
+		$critique_id = $wpdb->insert_id;
+		$file_url    = wp_get_attachment_url( $attachment_id );
+
+		return rest_ensure_response( array(
+			'id'                  => $critique_id,
+			'name'                => $name,
+			'type'                => $ext,
+			'skills'              => json_decode( $doc->skills, true ) ?: array(),
+			'is_critique_version' => true,
+			'url'                 => $file_url,
+			'critique_text'       => $text,
+		) );
+	}
+
 	// -------------------------------------------------------------------------
 	// Candidates
 	// -------------------------------------------------------------------------
@@ -603,6 +800,32 @@ class Skillsaw_API {
 			'filename' => $filename,
 			'data'     => base64_encode( $pdf ),
 		) );
+	}
+
+	public function archive_candidate( $request ) {
+		global $wpdb;
+		$updated = $wpdb->update(
+			"{$wpdb->prefix}skillsaw_sessions",
+			array( 'archived_at' => current_time( 'mysql' ) ),
+			array( 'id' => (int) $request['id'] )
+		);
+		if ( $updated === false ) {
+			return new WP_Error( 'db_error', 'Could not archive candidate.', array( 'status' => 500 ) );
+		}
+		return rest_ensure_response( array( 'archived' => true ) );
+	}
+
+	public function unarchive_candidate( $request ) {
+		global $wpdb;
+		$updated = $wpdb->update(
+			"{$wpdb->prefix}skillsaw_sessions",
+			array( 'archived_at' => null ),
+			array( 'id' => (int) $request['id'] )
+		);
+		if ( $updated === false ) {
+			return new WP_Error( 'db_error', 'Could not restore candidate.', array( 'status' => 500 ) );
+		}
+		return rest_ensure_response( array( 'archived' => false ) );
 	}
 
 	public function get_transcript( $request ) {
@@ -710,7 +933,7 @@ class Skillsaw_API {
 		}
 
 		$sessions = new Skillsaw_Sessions();
-		$ip    = $_SERVER['REMOTE_ADDR'] ?? '';
+		$ip    = $this->get_client_ip();
 		$token = $sessions->create_session( $role_id, $mode, $ip );
 
 		if ( is_wp_error( $token ) ) {
@@ -729,6 +952,8 @@ class Skillsaw_API {
 			}
 			$response['critique_text']     = $critique['text'];
 			$response['critique_doc_name'] = $critique['doc_name'];
+			$response['critique_doc_url']  = $critique['url'];
+			$response['critique_doc_ext']  = $critique['ext'];
 			$response['candidate_note']    = $role['candidate_note'] ?? '';
 		}
 
@@ -927,6 +1152,19 @@ class Skillsaw_API {
 		return current_user_can( 'manage_options' );
 	}
 
+	private function get_client_ip() {
+		// On VIP (and most proxied hosts) the real IP is in X-Forwarded-For.
+		// Take only the first entry to avoid header spoofing.
+		if ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
+			$forwarded = explode( ',', $_SERVER['HTTP_X_FORWARDED_FOR'] );
+			$ip = trim( $forwarded[0] );
+			if ( filter_var( $ip, FILTER_VALIDATE_IP ) ) {
+				return $ip;
+			}
+		}
+		return $_SERVER['REMOTE_ADDR'] ?? '';
+	}
+
 	private function get_role_skills( $role_id ) {
 		global $wpdb;
 		return $wpdb->get_col(
@@ -959,8 +1197,9 @@ class Skillsaw_API {
 				ARRAY_A
 			);
 			if ( $critique ) {
-				$critique['skills']       = json_decode( $critique['skills'], true ) ?: array();
+				$critique['skills']        = json_decode( $critique['skills'], true ) ?: array();
 				$critique['critique_text'] = $critique['critique_text'] ?? null;
+				$critique['url']           = $critique['attachment_id'] ? wp_get_attachment_url( $critique['attachment_id'] ) : null;
 			}
 			$doc['critique'] = $critique;
 		}
@@ -1045,7 +1284,7 @@ class Skillsaw_API {
 		global $wpdb;
 		$row = $wpdb->get_row(
 			$wpdb->prepare(
-				"SELECT c.critique_text, p.name as parent_name
+				"SELECT c.critique_text, c.attachment_id, p.name as parent_name
 				 FROM {$wpdb->prefix}skillsaw_documents c
 				 LEFT JOIN {$wpdb->prefix}skillsaw_documents p ON p.id = c.parent_document_id
 				 WHERE c.role_id = %d AND c.is_critique_version = 1
@@ -1053,12 +1292,23 @@ class Skillsaw_API {
 				$role_id
 			)
 		);
-		if ( ! $row || ! $row->critique_text ) {
+		if ( ! $row ) {
 			return null;
+		}
+		if ( ! $row->attachment_id && ! $row->critique_text ) {
+			return null;
+		}
+		$url = $row->attachment_id ? wp_get_attachment_url( $row->attachment_id ) : null;
+		$ext = null;
+		if ( $row->attachment_id ) {
+			$file = get_attached_file( $row->attachment_id );
+			$ext  = $file ? strtolower( pathinfo( $file, PATHINFO_EXTENSION ) ) : null;
 		}
 		return array(
 			'text'     => $row->critique_text,
 			'doc_name' => $row->parent_name ?: 'Document for review',
+			'url'      => $url,
+			'ext'      => $ext,
 		);
 	}
 
@@ -1102,23 +1352,46 @@ class Skillsaw_API {
 		$instructions = $session['instructions'] ?? '';
 		$skill_list   = implode( ', ', $skills );
 
-		$prompt  = "You are conducting a structured skills assessment for a candidate applying for the role of \"{$role_title}\" at Automattic — the company behind WordPress.com, WooCommerce, Tumblr, and other products.\n\n";
-		$prompt .= "Your goal is to assess the candidate's competency across these skills through natural conversation: {$skill_list}.\n\n";
+		$prompt  = "You are facilitating a skills assessment for a candidate applying for the role of \"{$role_title}\".\n\n";
+		$prompt .= "The skills being assessed are: {$skill_list}.\n\n";
 
 		if ( ! empty( $instructions ) ) {
 			$prompt .= "Recruiter instructions:\n{$instructions}\n\n";
 		}
 
 		if ( $mode === 'upload' ) {
-			$prompt .= "Format: Work sample review. The candidate will upload a work sample. Review it carefully and ask thoughtful follow-up questions about their decisions, tradeoffs, and reasoning.\n\n";
+			$prompt .= "Format: Work sample review.\n\n";
+			$prompt .= "This interaction should not resemble a job interview in any way. ";
+			$prompt .= "Your only goal is to receive the candidate's document and gather the minimum context needed to evaluate it — ";
+			$prompt .= "specifically its intent and scope.\n\n";
+			$prompt .= "If the document's intent and scope are clear from the outset, no follow-up questions are needed. A simple, warm acknowledgement (e.g. \"Thank you!\") is sufficient.\n\n";
+			$prompt .= "If the intent or scope is unclear, ask the candidate to provide context: what the document is, where, when, and why they produced it, and how it should be evaluated. ";
+			$prompt .= "Do not ask substantive questions about the document's content or probe the candidate's reasoning. ";
+			$prompt .= "Do not ask anything that would feel like an interview question.\n\n";
+			$prompt .= "When the session is complete, wrap up warmly and let the candidate know.\n\n";
 		} elseif ( $mode === 'critique' ) {
-			$prompt .= "Format: Document critique. The candidate has been given a document to review and critique. Engage with their feedback, probe their thinking, and explore how deeply they understand the issues they identify.\n\n";
+			$prompt .= "Format: Document critique.\n\n";
 			if ( $critique_text ) {
 				$prompt .= "The document the candidate is critiquing:\n\n---\n{$critique_text}\n---\n\n";
 			}
+			$prompt .= "This interaction should be candidate-led and should not feel like a job interview. ";
+			$prompt .= "Give the candidate time to read the document and formulate their own questions and opinions before engaging.\n\n";
+			$prompt .= "You may ask clarifying questions to help the candidate expand on what they have said, but never ask leading questions or offer suggestions. ";
+			$prompt .= "A good clarifying question lets the candidate expand without giving them the answer — for example, if the candidate says \"I think the timing for this campaign was off\", ";
+			$prompt .= "an appropriate follow-up is \"Specifically how was the timing off?\" ";
+			$prompt .= "A bad clarifying question injects your content into their response — for example, \"Good point — do you think it would have been better to run this campaign during the US holiday season?\" would be inappropriate.\n\n";
+			$prompt .= "Be absolutely neutral in tone and content. Never offer your own opinion on the document. Never volunteer information about it.\n\n";
+			$prompt .= "If the candidate asks a direct question about the document — for example, \"Why did they choose LinkedIn ads over Google or Meta?\" — do not answer it. ";
+			$prompt .= "Instead, turn it back to them: ask why they think that choice might have been made, or what possible reasons there might be. ";
+			$prompt .= "Let their responses reveal their expertise.\n\n";
+			$prompt .= "Do not guide the candidate's critique except to gently encourage coverage of areas they have not yet addressed if the session is drawing to a close. ";
+			$prompt .= "When the session is complete, wrap up warmly and let the candidate know.\n\n";
 		}
 
-		$prompt .= "Guidelines:\n- Keep responses concise and conversational (2–4 sentences unless the candidate asks for more)\n- Ask one question at a time\n- Be warm and professional\n- Do not reveal the scoring criteria or mention that you are rating them\n- When you have gathered sufficient signal on all skills, wrap up warmly and let the candidate know the session is complete";
+		$prompt .= "General guidelines:\n";
+		$prompt .= "- Keep responses concise and conversational (2–4 sentences unless the candidate asks for more)\n";
+		$prompt .= "- Be warm and professional\n";
+		$prompt .= "- Do not reveal the scoring criteria or mention that you are rating them";
 
 		return $prompt;
 	}

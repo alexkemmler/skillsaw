@@ -9,6 +9,23 @@ const RATING_META = {
 	obvious_failure:   { label: 'Below threshold',      className: 'fail'   },
 };
 
+function TrashIcon() {
+	return (
+		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+			<path d="M6 2a1 1 0 0 0-1 1v.5H2.5a.5.5 0 0 0 0 1H3v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-8h.5a.5.5 0 0 0 0-1H11V3a1 1 0 0 0-1-1H6zm0 1h4v.5H6V3zM4 4.5h8v8H4v-8zm2 1.5a.5.5 0 0 0-.5.5v4a.5.5 0 0 0 1 0v-4A.5.5 0 0 0 6 6zm4 0a.5.5 0 0 0-.5.5v4a.5.5 0 0 0 1 0v-4A.5.5 0 0 0 10 6z"/>
+		</svg>
+	);
+}
+
+function RestoreIcon() {
+	return (
+		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+			<path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+			<path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+		</svg>
+	);
+}
+
 function SkillChip( { name, rating } ) {
 	const meta = RATING_META[ rating ] || RATING_META.no_response;
 	return (
@@ -150,7 +167,7 @@ function TranscriptModal( { session, onClose } ) {
 
 // ─── Candidate row ────────────────────────────────────────────────────────────
 
-function CandidateRow( { session, onOpenTranscript, onDownloadPdf } ) {
+function CandidateRow( { session, onOpenTranscript, onDownloadPdf, onArchive, isArchivedView } ) {
 	const initials = session.candidate_name
 		.split( ' ' )
 		.map( ( n ) => n[ 0 ] )
@@ -220,9 +237,20 @@ function CandidateRow( { session, onOpenTranscript, onDownloadPdf } ) {
 						title="Download assessment PDF"
 						onClick={ () => onDownloadPdf( session.id ) }
 					>
-						↓ PDF
+						↓ <span className="skillsaw-pdf-badge">PDF</span>
 					</button>
 				</div>
+			</div>
+
+			<div className="skillsaw-candidate-archive-col">
+				<button
+					className={ `skillsaw-archive-btn${ isArchivedView ? ' skillsaw-archive-btn--restore' : '' }` }
+					title={ isArchivedView ? 'Restore candidate' : 'Archive candidate' }
+					onClick={ () => onArchive( session.id, ! session.archived_at ) }
+				>
+					{ isArchivedView ? <RestoreIcon /> : <TrashIcon /> }
+					<span>{ isArchivedView ? 'Restore' : 'Archive' }</span>
+				</button>
 			</div>
 		</div>
 	);
@@ -231,14 +259,15 @@ function CandidateRow( { session, onOpenTranscript, onDownloadPdf } ) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function CandidatesTab() {
-	const [ sessions,   setSessions   ] = useState( [] );
-	const [ roles,      setRoles      ] = useState( [] );
-	const [ loading,    setLoading    ] = useState( true );
-	const [ error,      setError      ] = useState( '' );
-	const [ search,     setSearch     ] = useState( '' );
-	const [ roleFilter, setRoleFilter ] = useState( 'all' );
-	const [ modeFilter, setModeFilter ] = useState( 'all' );
-	const [ openSession, setOpen      ] = useState( null );
+	const [ sessions,       setSessions       ] = useState( [] );
+	const [ roles,          setRoles          ] = useState( [] );
+	const [ loading,        setLoading        ] = useState( true );
+	const [ error,          setError          ] = useState( '' );
+	const [ search,         setSearch         ] = useState( '' );
+	const [ roleFilter,     setRoleFilter     ] = useState( 'all' );
+	const [ modeFilter,     setModeFilter     ] = useState( 'all' );
+	const [ archiveFilter,  setArchiveFilter  ] = useState( 'active' );
+	const [ openSession,    setOpen           ] = useState( null );
 
 	const handleDownloadPdf = async ( id ) => {
 		try {
@@ -254,6 +283,19 @@ export default function CandidatesTab() {
 		}
 	};
 
+	const handleArchive = async ( id, archive ) => {
+		const action = archive ? 'archive' : 'unarchive';
+		try {
+			await apiFetch( { path: `/skillsaw/v1/candidates/${ id }/${ action }`, method: 'POST' } );
+			setSessions( ( prev ) => prev.map( ( s ) =>
+				s.id === id ? { ...s, archived_at: archive ? new Date().toISOString() : null } : s
+			) );
+		} catch ( err ) {
+			// eslint-disable-next-line no-alert
+			window.alert( `Failed to ${ action } candidate: ` + err.message );
+		}
+	};
+
 	useEffect( () => {
 		Promise.all( [
 			apiFetch( { path: '/skillsaw/v1/candidates' } ),
@@ -265,6 +307,8 @@ export default function CandidatesTab() {
 	}, [] );
 
 	const filtered = sessions.filter( ( s ) => {
+		if ( archiveFilter === 'active'   && s.archived_at )  return false;
+		if ( archiveFilter === 'archived' && ! s.archived_at ) return false;
 		if ( search ) {
 			const q = search.toLowerCase();
 			if (
@@ -276,6 +320,8 @@ export default function CandidatesTab() {
 		if ( modeFilter !== 'all' && s.mode !== modeFilter ) return false;
 		return true;
 	} );
+
+	const isArchivedView = archiveFilter === 'archived';
 
 	if ( loading ) return <Spinner />;
 
@@ -314,11 +360,21 @@ export default function CandidatesTab() {
 					<option value="upload">Upload</option>
 					<option value="critique">Critique</option>
 				</select>
+				<select
+					className="skillsaw-filter-select"
+					value={ archiveFilter }
+					onChange={ ( e ) => setArchiveFilter( e.target.value ) }
+				>
+					<option value="active">Active</option>
+					<option value="archived">Archived</option>
+					<option value="all">All candidates</option>
+				</select>
 			</div>
 
 			<div className="skillsaw-results-meta">
 				<span>
-					<strong>{ filtered.length }</strong> of { sessions.length } candidates
+					<strong>{ filtered.length }</strong> of { sessions.filter( s => archiveFilter === 'all' || ( archiveFilter === 'active' ? ! s.archived_at : s.archived_at ) ).length } candidates
+					{ isArchivedView && <span className="skillsaw-archived-badge"> — archived</span> }
 				</span>
 				<div className="skillsaw-legend">
 					{ Object.values( RATING_META ).map( ( m ) => (
@@ -339,6 +395,7 @@ export default function CandidatesTab() {
 						<span>Date</span>
 						<span>Time taken</span>
 						<span>Transcript</span>
+						<span></span>
 					</div>
 				) }
 				{ filtered.length === 0 && (
@@ -354,6 +411,8 @@ export default function CandidatesTab() {
 						session={ session }
 						onOpenTranscript={ setOpen }
 						onDownloadPdf={ handleDownloadPdf }
+						onArchive={ handleArchive }
+						isArchivedView={ isArchivedView }
 					/>
 				) ) }
 			</div>

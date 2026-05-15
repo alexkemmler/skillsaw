@@ -1,4 +1,4 @@
-import { useState, useEffect } from '@wordpress/element';
+import { useState, useEffect, useRef } from '@wordpress/element';
 import { Button, TextControl, TextareaControl, SelectControl, Notice, Spinner, Modal } from '@wordpress/components';
 import apiFetch from '@wordpress/api-fetch';
 
@@ -77,24 +77,51 @@ function CopyEmbedButton( { role } ) {
 	);
 }
 
-function DocumentRow( { doc, role, onCritiqueGenerated, onDelete } ) {
-	const [ generating,      setGenerating      ] = useState( false );
-	const [ error,           setError           ] = useState( '' );
-	const [ critiqueExpanded, setCritiqueExpanded ] = useState( false );
+function DocumentRow( { doc, role, onCritiqueUploaded, onDelete } ) {
+	const [ suggesting,       setSuggesting       ] = useState( false );
+	const [ suggestions,      setSuggestions      ] = useState( '' );
+	const [ showSuggestions,  setShowSuggestions  ] = useState( false );
+	const [ uploadingCritique, setUploadingCritique ] = useState( false );
+	const [ error,            setError            ] = useState( '' );
+	const [ critiqueExpanded, setCritiqueExpanded  ] = useState( false );
+	const critiqueInputRef = useRef( null );
 
-	const handleGenerateCritique = async () => {
-		setGenerating( true );
+	const handleSuggestMistakes = async () => {
+		setSuggesting( true );
 		setError( '' );
 		try {
 			const result = await apiFetch( {
-				path: `/skillsaw/v1/roles/${ role.id }/documents/${ doc.id }/generate-critique`,
+				path:   `/skillsaw/v1/roles/${ role.id }/documents/${ doc.id }/suggest-mistakes`,
 				method: 'POST',
 			} );
-			onCritiqueGenerated( doc.id, result );
+			setSuggestions( result.suggestions );
+			setShowSuggestions( true );
 		} catch ( err ) {
-			setError( err.message || 'Failed to generate critique.' );
+			setError( err.message || 'Failed to generate suggestions.' );
 		} finally {
-			setGenerating( false );
+			setSuggesting( false );
+		}
+	};
+
+	const handleCritiqueUpload = async ( e ) => {
+		const file = e.target.files?.[ 0 ];
+		if ( ! file ) return;
+		setUploadingCritique( true );
+		setError( '' );
+		const formData = new FormData();
+		formData.append( 'file', file );
+		try {
+			const result = await apiFetch( {
+				path:   `/skillsaw/v1/roles/${ role.id }/documents/${ doc.id }/critique-upload`,
+				method: 'POST',
+				body:   formData,
+			} );
+			onCritiqueUploaded( doc.id, result );
+		} catch ( err ) {
+			setError( err.message || 'Upload failed.' );
+		} finally {
+			setUploadingCritique( false );
+			if ( critiqueInputRef.current ) critiqueInputRef.current.value = '';
 		}
 	};
 
@@ -115,16 +142,25 @@ function DocumentRow( { doc, role, onCritiqueGenerated, onDelete } ) {
 							View ↗
 						</a>
 					) }
-					{ ! doc.critique && (
-						<Button
-							variant="secondary"
-							size="small"
-							onClick={ handleGenerateCritique }
-							disabled={ generating }
-						>
-							{ generating ? <Spinner /> : 'Generate critique' }
-						</Button>
-					) }
+					<Button
+						variant="secondary"
+						size="small"
+						onClick={ handleSuggestMistakes }
+						disabled={ suggesting }
+					>
+						{ suggesting ? <Spinner /> : 'Suggest mistakes' }
+					</Button>
+					<label className="skillsaw-critique-upload-label">
+						{ uploadingCritique ? <Spinner /> : ( doc.critique ? 'Replace critique doc' : 'Upload critique doc' ) }
+						<input
+							ref={ critiqueInputRef }
+							type="file"
+							accept=".pdf,.docx,.txt,.md"
+							className="skillsaw-hidden-file-input"
+							onChange={ handleCritiqueUpload }
+							disabled={ uploadingCritique }
+						/>
+					</label>
 					<Button
 						variant="tertiary"
 						size="small"
@@ -136,6 +172,35 @@ function DocumentRow( { doc, role, onCritiqueGenerated, onDelete } ) {
 				</div>
 			</div>
 			{ error && <p className="skillsaw-error">{ error }</p> }
+
+			{ showSuggestions && (
+				<Modal
+					title={ `Suggested weaknesses — ${ doc.name }` }
+					onRequestClose={ () => setShowSuggestions( false ) }
+					size="medium"
+				>
+					<div className="skillsaw-suggestions-body">
+						<p className="skillsaw-suggestions-intro">
+							Edit your document to introduce some of these weaknesses, then upload it as the critique document.
+						</p>
+						<pre className="skillsaw-suggestions-text">{ suggestions }</pre>
+					</div>
+					<div className="skillsaw-suggestions-footer">
+						<Button
+							variant="secondary"
+							onClick={ () => {
+								navigator.clipboard?.writeText( suggestions );
+							} }
+						>
+							Copy to clipboard
+						</Button>
+						<Button variant="primary" onClick={ () => setShowSuggestions( false ) }>
+							Close
+						</Button>
+					</div>
+				</Modal>
+			) }
+
 			{ doc.critique && (
 				<>
 					<div className="skillsaw-doc-row skillsaw-doc-row--critique">
@@ -143,16 +208,27 @@ function DocumentRow( { doc, role, onCritiqueGenerated, onDelete } ) {
 						<span className="skillsaw-doc-name">{ doc.critique.name }</span>
 						<SkillChips skills={ doc.critique.skills } />
 						<div className="skillsaw-doc-actions">
-							<Button
-								variant="tertiary"
-								size="small"
-								onClick={ () => setCritiqueExpanded( ( v ) => ! v ) }
-							>
-								{ critiqueExpanded ? 'Hide' : 'View critique' }
-							</Button>
+							{ doc.critique.url ? (
+								<a
+									href={ doc.critique.url }
+									target="_blank"
+									rel="noreferrer"
+									className="skillsaw-doc-view-link"
+								>
+									View ↗
+								</a>
+							) : (
+								<Button
+									variant="tertiary"
+									size="small"
+									onClick={ () => setCritiqueExpanded( ( v ) => ! v ) }
+								>
+									{ critiqueExpanded ? 'Hide' : 'View text' }
+								</Button>
+							) }
 						</div>
 					</div>
-					{ critiqueExpanded && (
+					{ critiqueExpanded && ! doc.critique.url && (
 						<div className="skillsaw-critique-preview">
 							{ doc.critique.critique_text
 								? <pre className="skillsaw-critique-text">{ doc.critique.critique_text }</pre>
@@ -317,7 +393,7 @@ function RoleConfig( { role, onSave, onClose } ) {
 						key={ doc.id }
 						doc={ doc }
 						role={ role }
-						onCritiqueGenerated={ handleCritiqueGenerated }
+						onCritiqueUploaded={ handleCritiqueGenerated }
 						onDelete={ handleDeleteDoc }
 					/>
 				) ) }

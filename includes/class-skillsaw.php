@@ -138,6 +138,7 @@ class Skillsaw {
 			if ( ! wp_verify_nonce( sanitize_key( $_POST['skillsaw_apply_nonce'] ), 'skillsaw_apply_' . $role_id ) ) {
 				return '<p>' . esc_html__( 'Security check failed. Please try again.', 'skillsaw' ) . '</p>';
 			}
+			$this->process_apply_submission( $role );
 			return $this->render_apply_thankyou( $role );
 		}
 
@@ -158,7 +159,7 @@ class Skillsaw {
 			<div class="skillsaw-apply-form">
 				<h3><?php esc_html_e( 'Complete your application', 'skillsaw' ); ?></h3>
 
-				<form id="application_form" method="post">
+				<form id="application_form" method="post" enctype="multipart/form-data">
 					<?php wp_nonce_field( 'skillsaw_apply_' . $role_id, 'skillsaw_apply_nonce' ); ?>
 					<input type="hidden" name="skillsaw_role_id" value="<?php echo esc_attr( $role_id ); ?>">
 
@@ -170,6 +171,14 @@ class Skillsaw {
 						<div class="skillsaw-form-group">
 							<label for="last_name"><?php esc_html_e( 'Last name', 'skillsaw' ); ?> <span aria-hidden="true">*</span></label>
 							<input type="text" id="last_name" name="last_name" required autocomplete="family-name">
+						</div>
+					</div>
+
+					<div class="skillsaw-form-row">
+						<div class="skillsaw-form-group">
+							<label for="preferred_name"><?php esc_html_e( 'Preferred first name', 'skillsaw' ); ?></label>
+							<input type="text" id="preferred_name" name="preferred_name" autocomplete="nickname">
+							<p class="skillsaw-form-help"><?php esc_html_e( 'If different from your legal first name — this is how we\'ll address you.', 'skillsaw' ); ?></p>
 						</div>
 					</div>
 
@@ -203,6 +212,14 @@ class Skillsaw {
 						<div class="skillsaw-form-group">
 							<label for="cover_letter"><?php esc_html_e( 'Cover letter', 'skillsaw' ); ?></label>
 							<textarea id="cover_letter" name="cover_letter" rows="6" placeholder="<?php esc_attr_e( 'Tell us about yourself and why you\'re interested in this role…', 'skillsaw' ); ?>"></textarea>
+						</div>
+					</div>
+
+					<div class="skillsaw-form-row">
+						<div class="skillsaw-form-group">
+							<label for="essay_craft"><?php esc_html_e( 'What\'s an idea, book, blog post, or talk that recently changed how you think about your craft?', 'skillsaw' ); ?> <span aria-hidden="true">*</span></label>
+							<p class="skillsaw-form-help"><?php esc_html_e( 'What is it? How did it change the way you build, collaborate, or make decisions?', 'skillsaw' ); ?></p>
+							<textarea id="essay_craft" name="essay_craft" rows="6" required></textarea>
 						</div>
 					</div>
 
@@ -242,6 +259,13 @@ class Skillsaw {
 						</div>
 					</div>
 
+					<div class="skillsaw-form-row skillsaw-form-row--half">
+						<div class="skillsaw-form-group">
+							<label for="salary_expectation"><?php esc_html_e( 'Salary expectation', 'skillsaw' ); ?></label>
+							<input type="text" id="salary_expectation" name="salary_expectation" placeholder="<?php esc_attr_e( 'e.g. $120,000–$140,000', 'skillsaw' ); ?>">
+						</div>
+					</div>
+
 					<div class="skillsaw-form-row">
 						<div class="skillsaw-form-group">
 							<label for="additional_context"><?php esc_html_e( 'Anything else you\'d like us to know?', 'skillsaw' ); ?></label>
@@ -257,6 +281,48 @@ class Skillsaw {
 		</div>
 		<?php
 		return ob_get_clean();
+	}
+
+	private function process_apply_submission( $role ) {
+		$str  = function( $key ) { return sanitize_text_field( wp_unslash( $_POST[ $key ] ?? '' ) ); };
+		$area = function( $key ) { return sanitize_textarea_field( wp_unslash( $_POST[ $key ] ?? '' ) ); };
+		$url  = function( $key ) { return esc_url_raw( wp_unslash( $_POST[ $key ] ?? '' ) ); };
+
+		$fields = array(
+			'First name'       => $str( 'first_name' ),
+			'Last name'        => $str( 'last_name' ),
+			'Preferred name'   => $str( 'preferred_name' ),
+			'Email'            => sanitize_email( wp_unslash( $_POST['email'] ?? '' ) ),
+			'Phone'            => $str( 'phone' ),
+			'Location'         => $str( 'location' ),
+			'LinkedIn'         => $url( 'linkedin' ),
+			'Website'          => $url( 'website' ),
+			'How they heard'   => $str( 'heard_about' ),
+			'Salary expectation' => $str( 'salary_expectation' ),
+			'Cover letter'     => $area( 'cover_letter' ),
+			'Essay (craft)'    => $area( 'essay_craft' ),
+			'Additional notes' => $area( 'additional_context' ),
+		);
+
+		$resume_name = '';
+		if ( ! empty( $_FILES['resume']['name'] ) ) {
+			$resume_name = sanitize_file_name( $_FILES['resume']['name'] );
+		}
+
+		$body  = "New application received via Skillsaw.\n\n";
+		$body .= 'Role: ' . $role['title'] . "\n\n";
+		foreach ( $fields as $label => $value ) {
+			if ( $value !== '' ) {
+				$body .= $label . ":\n" . $value . "\n\n";
+			}
+		}
+		if ( $resume_name ) {
+			$body .= "Resume file: " . $resume_name . "\n(File was submitted with the form — retrieve from Greenhouse or WP media if needed.)\n";
+		}
+
+		$to      = get_option( 'admin_email' );
+		$subject = '[Skillsaw] Application: ' . $role['title'] . ' — ' . $fields['First name'] . ' ' . $fields['Last name'];
+		wp_mail( $to, $subject, $body );
 	}
 
 	private function render_apply_thankyou( $role ) {

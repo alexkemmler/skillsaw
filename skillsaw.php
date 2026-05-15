@@ -3,7 +3,7 @@
  * Plugin Name: Skillsaw
  * Plugin URI:  https://automattic.com
  * Description: Candidate evaluation chatbot for Automattic's hiring workflow.
- * Version:     0.3.1
+ * Version:     0.3.2
  * Author:      Automattic
  * License:     GPL-2.0-or-later
  * Text Domain: skillsaw
@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'SKILLSAW_VERSION', '0.3.1' );
+define( 'SKILLSAW_VERSION', '0.3.2' );
 define( 'SKILLSAW_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SKILLSAW_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SKILLSAW_PLUGIN_FILE', __FILE__ );
@@ -36,4 +36,4 @@ function skillsaw_run() {
 	$plugin = new Skillsaw();
 	$plugin->run();
 }
-skillsaw_run();
+add_action( 'plugins_loaded', 'skillsaw_run' );

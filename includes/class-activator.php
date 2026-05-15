@@ -7,9 +7,35 @@ class Skillsaw_Activator {
 
 	public static function activate() {
 		self::create_tables();
+		self::run_migrations();
 		if ( ! wp_next_scheduled( 'skillsaw_expire_sessions' ) ) {
 			wp_schedule_event( time(), 'hourly', 'skillsaw_expire_sessions' );
 		}
+	}
+
+	/**
+	 * Explicit ALTER TABLE migrations for columns added after initial release.
+	 * Safe to run on every activation/upgrade — each check is idempotent.
+	 */
+	private static function run_migrations() {
+		global $wpdb;
+		$table = $wpdb->prefix . 'skillsaw_sessions';
+		$cols  = $wpdb->get_col( "DESCRIBE `{$table}`" );
+		if ( ! $cols ) {
+			return;
+		}
+		// DDL statements (ALTER TABLE) cannot be parameterised with $wpdb->prepare().
+		// Table name is constructed from $wpdb->prefix (trusted) and a hard-coded string.
+		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared
+		if ( ! in_array( 'gh_push_error', $cols, true ) ) {
+			$wpdb->query( "ALTER TABLE `{$table}` ADD COLUMN `gh_push_error` text NOT NULL DEFAULT ''" );
+		}
+		if ( ! in_array( 'archived_at', $cols, true ) ) {
+			$wpdb->query( "ALTER TABLE `{$table}` ADD COLUMN `archived_at` datetime DEFAULT NULL" );
+		}
+		// phpcs:enable
+
+		update_option( 'skillsaw_db_version', SKILLSAW_VERSION );
 	}
 
 	private static function create_tables() {
@@ -69,6 +95,7 @@ class Skillsaw_Activator {
 				greenhouse_candidate_id varchar(100) NOT NULL DEFAULT '',
 				gh_pushed_at datetime DEFAULT NULL,
 				gh_push_error text NOT NULL DEFAULT '',
+				archived_at datetime DEFAULT NULL,
 				PRIMARY KEY (id),
 				UNIQUE KEY session_token (session_token),
 				KEY role_id (role_id),
@@ -101,7 +128,5 @@ class Skillsaw_Activator {
 		foreach ( $sql as $query ) {
 			dbDelta( $query );
 		}
-
-		update_option( 'skillsaw_db_version', SKILLSAW_VERSION );
 	}
 }

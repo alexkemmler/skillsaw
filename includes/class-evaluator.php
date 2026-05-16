@@ -288,7 +288,7 @@ class Skillsaw_Evaluator {
 		if ( ! empty( $skills ) && $has_ref_docs ) {
 			if ( $is_critique ) {
 				// For critique mode, use the critique document's skill tags.
-				$critique_skills = $this->get_critique_doc_skills( $session['role_id'] );
+				$critique_skills = $this->get_critique_doc_skills( $session['role_id'], $session['critique_doc_id'] ?? 0 );
 				$skill_doc_map   = array();
 				foreach ( $skills as $s ) {
 					// If critique has no skill tags, all skills are in scope.
@@ -438,17 +438,29 @@ class Skillsaw_Evaluator {
 	// Response parser
 	// -------------------------------------------------------------------------
 
-	private function get_critique_doc_skills( $role_id ) {
+	private function get_critique_doc_skills( $role_id, $doc_id = 0 ) {
 		global $wpdb;
-		$row = $wpdb->get_row(
-			$wpdb->prepare(
-				"SELECT skills FROM {$wpdb->prefix}skillsaw_documents
-				 WHERE role_id = %d AND is_critique_version = 1 AND attachment_id IS NOT NULL
-				 ORDER BY created_at DESC LIMIT 1",
-				$role_id
-			),
-			ARRAY_A
-		);
+		if ( $doc_id ) {
+			$row = $wpdb->get_row(
+				$wpdb->prepare(
+					"SELECT skills FROM {$wpdb->prefix}skillsaw_documents
+					 WHERE id = %d AND role_id = %d AND is_critique_version = 1",
+					$doc_id,
+					$role_id
+				),
+				ARRAY_A
+			);
+		} else {
+			$row = $wpdb->get_row(
+				$wpdb->prepare(
+					"SELECT skills FROM {$wpdb->prefix}skillsaw_documents
+					 WHERE role_id = %d AND is_critique_version = 1 AND attachment_id IS NOT NULL
+					 ORDER BY created_at DESC LIMIT 1",
+					$role_id
+				),
+				ARRAY_A
+			);
+		}
 		if ( ! $row ) {
 			return array();
 		}

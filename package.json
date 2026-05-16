@@ -4,8 +4,14 @@
   "description": "Candidate evaluation chatbot WordPress plugin",
   "private": true,
   "scripts": {
-    "build": "wp-scripts build src/admin/index.js --output-path=assets/js",
-    "start": "wp-scripts start src/admin/index.js --output-path=assets/js"
+    "build": "wp-scripts build",
+    "start": "wp-scripts start"
+  },
+  "dependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "react-markdown": "^8.0.0",
+    "react-dropzone": "^14.2.0"
   },
   "devDependencies": {
     "@wordpress/scripts": "^30.0.0"

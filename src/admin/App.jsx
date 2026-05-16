@@ -2,17 +2,13 @@ import { useState } from '@wordpress/element';
 import { Button } from '@wordpress/components';
 import RolesTab from './components/RolesTab';
 import CandidatesTab from './components/CandidatesTab';
+import AboutTab from './components/AboutTab';
 
 export default function App() {
 	const [ tab, setTab ] = useState( 'candidates' );
 
 	return (
 		<div className="skillsaw-app">
-			<p className="skillsaw-subtitle">
-				Candidates who interacted with the Skillsaw chatbot during their application appear below.
-				Skill chips reflect the bot&rsquo;s evaluation from the chat session.
-				Transcripts and uploaded files are also pushed to each candidate&rsquo;s Greenhouse profile.
-			</p>
 			<hr className="wp-header-end" />
 
 			<div className="nav-tab-wrapper" role="tablist">
@@ -32,9 +28,19 @@ export default function App() {
 				>
 					Roles
 				</button>
+				<button
+					className={ `nav-tab ${ tab === 'about' ? 'nav-tab-active' : '' }` }
+					role="tab"
+					aria-selected={ tab === 'about' }
+					onClick={ () => setTab( 'about' ) }
+				>
+					About
+				</button>
 			</div>
 
-			{ tab === 'candidates' ? <CandidatesTab /> : <RolesTab /> }
+			{ tab === 'candidates' && <CandidatesTab /> }
+			{ tab === 'roles' && <RolesTab /> }
+			{ tab === 'about' && <AboutTab /> }
 		</div>
 	);
 }

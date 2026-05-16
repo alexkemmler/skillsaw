@@ -7,6 +7,38 @@ class Skillsaw_Activator {
 
 	public static function activate() {
 		self::create_tables();
+		self::run_migrations();
+		if ( ! wp_next_scheduled( 'skillsaw_expire_sessions' ) ) {
+			wp_schedule_event( time(), 'hourly', 'skillsaw_expire_sessions' );
+		}
+	}
+
+	/**
+	 * Explicit ALTER TABLE migrations for columns added after initial release.
+	 * Safe to run on every activation/upgrade — each check is idempotent.
+	 */
+	private static function run_migrations() {
+		global $wpdb;
+		$table = $wpdb->prefix . 'skillsaw_sessions';
+		$cols  = $wpdb->get_col( "DESCRIBE `{$table}`" );
+		if ( ! $cols ) {
+			return;
+		}
+		// DDL statements (ALTER TABLE) cannot be parameterised with $wpdb->prepare().
+		// Table name is constructed from $wpdb->prefix (trusted) and a hard-coded string.
+		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared
+		if ( ! in_array( 'gh_push_error', $cols, true ) ) {
+			$wpdb->query( "ALTER TABLE `{$table}` ADD COLUMN `gh_push_error` text NOT NULL DEFAULT ''" );
+		}
+		if ( ! in_array( 'archived_at', $cols, true ) ) {
+			$wpdb->query( "ALTER TABLE `{$table}` ADD COLUMN `archived_at` datetime DEFAULT NULL" );
+		}
+		if ( ! in_array( 'critique_doc_id', $cols, true ) ) {
+			$wpdb->query( "ALTER TABLE `{$table}` ADD COLUMN `critique_doc_id` bigint(20) UNSIGNED DEFAULT NULL" );
+		}
+		// phpcs:enable
+
+		update_option( 'skillsaw_db_version', SKILLSAW_VERSION );
 	}
 
 	private static function create_tables() {
@@ -21,6 +53,8 @@ class Skillsaw_Activator {
 				team varchar(100) NOT NULL DEFAULT '',
 				status varchar(20) NOT NULL DEFAULT 'draft',
 				instructions longtext NOT NULL DEFAULT '',
+				greenhouse_job_id varchar(100) NOT NULL DEFAULT '',
+				candidate_note longtext NOT NULL DEFAULT '',
 				created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
 				updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 				PRIMARY KEY (id)
@@ -63,6 +97,9 @@ class Skillsaw_Activator {
 				ip_hash varchar(64) NOT NULL DEFAULT '',
 				greenhouse_candidate_id varchar(100) NOT NULL DEFAULT '',
 				gh_pushed_at datetime DEFAULT NULL,
+				gh_push_error text NOT NULL DEFAULT '',
+				archived_at datetime DEFAULT NULL,
+				critique_doc_id bigint(20) UNSIGNED DEFAULT NULL,
 				PRIMARY KEY (id),
 				UNIQUE KEY session_token (session_token),
 				KEY role_id (role_id),
@@ -75,6 +112,7 @@ class Skillsaw_Activator {
 				role varchar(10) NOT NULL,
 				content longtext NOT NULL,
 				attachment_id bigint(20) UNSIGNED DEFAULT NULL,
+				candidate_skills text DEFAULT NULL,
 				created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
 				PRIMARY KEY (id),
 				KEY session_id (session_id)
@@ -94,7 +132,5 @@ class Skillsaw_Activator {
 		foreach ( $sql as $query ) {
 			dbDelta( $query );
 		}
-
-		update_option( 'skillsaw_db_version', SKILLSAW_VERSION );
 	}
 }

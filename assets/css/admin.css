@@ -59,7 +59,8 @@
 .skillsaw-chip--strong .skillsaw-chip-dot { background: #1d894b; }
 .skillsaw-chip--met { background: #f0f0f1; }
 .skillsaw-chip--met .skillsaw-chip-dot { background: #50575e; }
-.skillsaw-chip--unmet { background: #f0f0f1; opacity: 0.7; }
+.skillsaw-chip--unmet { background: #f8f8f8; border-color: #e0e0e0; color: #b4b8bc; }
+.skillsaw-chip--unmet .skillsaw-chip-dot { background: #d0d3d7; }
 .skillsaw-chip--fail { background: #f6e6e3; border-color: #e0a3a0; color: #6b1f1f; }
 .skillsaw-chip--fail .skillsaw-chip-dot { background: #d63638; }
 .skillsaw-chip-remove {
@@ -115,12 +116,34 @@
 .skillsaw-toggle--on .skillsaw-toggle-thumb::after { left: 16px; }
 
 /* ── Roles list ─────────────────────────────────────────────────────────── */
+.skillsaw-list-head {
+	display: grid;
+	gap: 12px;
+	align-items: center;
+	padding: 7px 16px;
+	background: #f6f7f7;
+	border-bottom: 1px solid #dcdcde;
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: #757575;
+}
+
+.skillsaw-roles-list-head {
+	grid-template-columns: 24px 1fr 120px 140px 120px 130px 60px 110px 90px;
+}
+
+.skillsaw-candidates-list-head {
+	grid-template-columns: 200px 160px 1fr 88px 88px 120px 48px;
+}
+
 .skillsaw-roles-list { border: 1px solid #dcdcde; border-radius: 3px; }
 .skillsaw-role-row { border-bottom: 1px solid #dcdcde; }
 .skillsaw-role-row:last-child { border-bottom: none; }
 .skillsaw-role-row-header {
 	display: grid;
-	grid-template-columns: 24px 1fr 120px 140px 120px 130px 60px 110px 70px;
+	grid-template-columns: 24px 1fr 120px 140px 120px 130px 60px 110px 90px;
 	gap: 12px;
 	align-items: center;
 	padding: 12px 16px;
@@ -130,7 +153,8 @@
 }
 .skillsaw-role-row-header:hover { background: #f6f7f7; }
 .skillsaw-role-row--expanded .skillsaw-role-row-header { background: #f6f7f7; }
-.skillsaw-chevron { color: #50575e; font-size: 12px; }
+.skillsaw-chevron { color: #50575e; font-size: 18px; line-height: 1; }
+.skillsaw-role-actions { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
 .skillsaw-role-title { font-weight: 600; }
 .skillsaw-role-id { display: block; font-size: 11px; font-weight: 400; color: #8c8f94; }
 .skillsaw-role-team, .skillsaw-role-division { font-size: 13px; color: #50575e; }
@@ -183,6 +207,76 @@
 }
 .skillsaw-doc-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .skillsaw-doc-actions { display: flex; gap: 6px; align-items: center; margin-left: auto; flex-shrink: 0; }
+.skillsaw-doc-view-link {
+	font-size: 12px;
+	color: #2271b1;
+	text-decoration: none;
+	white-space: nowrap;
+}
+.skillsaw-doc-view-link:hover { text-decoration: underline; }
+
+.skillsaw-critique-preview {
+	background: #f9f7ff;
+	border: 1px solid #e0d8f5;
+	border-radius: 3px;
+	margin: 0 0 4px 24px;
+	padding: 12px 16px;
+	max-height: 320px;
+	overflow-y: auto;
+}
+.skillsaw-critique-text {
+	margin: 0;
+	font-family: inherit;
+	font-size: 13px;
+	line-height: 1.6;
+	white-space: pre-wrap;
+	word-break: break-word;
+	color: #1d2327;
+}
+
+/* ── Critique upload label ──────────────────────────────────────────────────── */
+.skillsaw-critique-upload-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 0 8px;
+	height: 28px;
+	font-size: 13px;
+	font-weight: 400;
+	border: 1px solid #c3c4c7;
+	border-radius: 3px;
+	cursor: pointer;
+	background: #fff;
+	color: #1d2327;
+	line-height: 1;
+}
+.skillsaw-critique-upload-label:hover { border-color: #50575e; }
+.skillsaw-hidden-file-input { display: none; }
+
+/* ── Suggest mistakes modal ─────────────────────────────────────────────────── */
+.skillsaw-suggestions-body { padding: 4px 0 16px; }
+.skillsaw-suggestions-intro { font-size: 13px; color: #50575e; margin-bottom: 12px; }
+.skillsaw-suggestions-text {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+	font-size: 13px;
+	line-height: 1.6;
+	white-space: pre-wrap;
+	word-break: break-word;
+	background: #f6f7f7;
+	border: 1px solid #dcdcde;
+	border-radius: 3px;
+	padding: 12px 16px;
+	max-height: 60vh;
+	overflow-y: auto;
+}
+.skillsaw-suggestions-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	padding-top: 12px;
+	border-top: 1px solid #dcdcde;
+}
+
 .skillsaw-upload-area { margin-top: 10px; }
 .skillsaw-upload-label {
 	display: inline-block;
@@ -200,9 +294,9 @@
 .skillsaw-candidates-list { border: 1px solid #dcdcde; border-radius: 3px; }
 .skillsaw-candidate-row {
 	display: grid;
-	grid-template-columns: 220px 180px 1fr 140px;
-	gap: 16px;
-	align-items: center;
+	grid-template-columns: 200px 160px 1fr 88px 88px 120px 48px;
+	gap: 12px;
+	align-items: start;
 	padding: 12px 16px;
 	border-bottom: 1px solid #dcdcde;
 	background: #fff;
@@ -223,7 +317,8 @@
 .skillsaw-candidate-email { font-size: 12px; color: #8c8f94; }
 .skillsaw-candidate-role { font-size: 13px; color: #1d2327; }
 .skillsaw-candidate-role small { display: block; font-size: 11px; color: #8c8f94; }
-.skillsaw-candidate-actions { display: flex; gap: 10px; align-items: center; }
+.skillsaw-candidate-skills { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0; overflow: hidden; max-height: calc( 3 * ( 22px + 6px ) ); }
+.skillsaw-candidate-actions { display: flex; gap: 10px; align-items: flex-start; padding-top: 2px; }
 .skillsaw-duration { font-size: 12px; color: #8c8f94; }
 
 /* ── Transcript modal ───────────────────────────────────────────────────── */
@@ -270,3 +365,351 @@
 /* ── Misc ───────────────────────────────────────────────────────────────── */
 .skillsaw-empty { color: #8c8f94; padding: 24px 16px; text-align: center; }
 .skillsaw-error { color: #d63638; font-size: 12px; margin: 4px 0; }
+.skillsaw-no-ratings { font-size: 12px; color: #a7aaad; font-style: italic; }
+
+/* ── Filter selects ─────────────────────────────────────────────────────── */
+.skillsaw-filter-select {
+	height: 36px;
+	padding: 0 28px 0 10px;
+	border: 1px solid #c3c4c7;
+	border-radius: 3px;
+	background: #fff url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%2350575e' stroke-width='1.5'/></svg>") no-repeat right 10px center;
+	appearance: none;
+	font-size: 13px;
+	color: #1d2327;
+	cursor: pointer;
+}
+.skillsaw-filter-select:focus { outline: 2px solid #2271b1; outline-offset: 0; }
+
+/* ── Mode pill ──────────────────────────────────────────────────────────── */
+.skillsaw-pill--mode {
+	background: #e8f0fe;
+	color: #2271b1;
+}
+
+.skillsaw-candidate-date,
+.skillsaw-candidate-duration {
+	font-size: 13px;
+	color: #50575e;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding-top: 2px;
+}
+
+.skillsaw-candidate-actions {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	align-items: flex-start;
+	padding-top: 2px;
+}
+
+.skillsaw-candidate-archive-col {
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	padding-top: 2px;
+}
+
+.skillsaw-archive-btn {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	background: none;
+	border: none;
+	padding: 4px 2px;
+	cursor: pointer;
+	color: #a7aaad;
+	font-size: 10px;
+	line-height: 1.2;
+	border-radius: 3px;
+	transition: color 0.1s;
+}
+
+.skillsaw-archive-btn:hover {
+	color: #d63638;
+}
+
+.skillsaw-archive-btn--restore {
+	color: #a7aaad;
+}
+
+.skillsaw-archive-btn--restore:hover {
+	color: #00a32a;
+}
+
+.skillsaw-gh-error {
+	font-size: 11px;
+	color: #d63638;
+	max-width: 180px;
+	word-break: break-word;
+}
+
+.skillsaw-gh-ok {
+	font-size: 11px;
+	color: #00a32a;
+}
+
+.skillsaw-candidate-btns {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.skillsaw-pdf-btn {
+	background: none;
+	border: none;
+	padding: 0;
+	font-size: 12px;
+	color: #50575e;
+	cursor: pointer;
+	line-height: 1.6;
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+}
+
+.skillsaw-pdf-btn:hover { color: #1e1e1e; }
+.skillsaw-pdf-btn:hover .skillsaw-pdf-badge { border-color: #a03030; color: #a03030; }
+
+.skillsaw-pdf-badge {
+	display: inline-block;
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.03em;
+	color: #b44;
+	border: 1.5px solid #c66;
+	border-radius: 2px 4px 2px 2px;
+	padding: 0px 3px 0px 3px;
+	line-height: 1.5;
+	position: relative;
+}
+
+.skillsaw-archived-badge { color: #a7aaad; font-style: italic; }
+
+/* ── File card (enhanced) ───────────────────────────────────────────────── */
+.skillsaw-file-card {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px 10px;
+	background: rgba(0,0,0,0.08);
+	border-radius: 6px;
+	margin-bottom: 8px;
+	font-size: 12px;
+}
+.skillsaw-file-card-main {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+/* WP admin sets a { color: #2271b1 } globally — override with full specificity */
+.skillsaw-msg-bubble .skillsaw-file-download,
+.skillsaw-msg-bubble .skillsaw-file-download:link,
+.skillsaw-msg-bubble .skillsaw-file-download:visited {
+	margin-left: auto;
+	color: rgba(255, 255, 255, 0.92) !important;
+	font-size: 11px;
+	font-weight: 600;
+	text-decoration: underline;
+	white-space: nowrap;
+	flex-shrink: 0;
+}
+.skillsaw-msg-bubble .skillsaw-file-download:hover { opacity: 0.75; }
+.skillsaw-file-skills {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 0 2px;
+	border-top: 1px solid rgba(255,255,255,0.15);
+}
+.skillsaw-file-skills-label {
+	font-size: 10px;
+	font-weight: 600;
+	opacity: 0.7;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	white-space: nowrap;
+}
+.skillsaw-chip--skill-tag {
+	background: rgba(255,255,255,0.2);
+	border-color: rgba(255,255,255,0.3);
+	color: #fff;
+	font-size: 11px;
+	padding: 3px 10px;
+	height: auto;
+}
+
+/* ── Transcript email ───────────────────────────────────────────────────── */
+.skillsaw-transcript-email {
+	margin-left: auto;
+	font-style: italic;
+}
+
+/* ── Skill ratings section ──────────────────────────────────────────────── */
+.skillsaw-transcript-ratings {
+	margin-top: 24px;
+	padding-top: 20px;
+	border-top: 1px solid #dcdcde;
+}
+.skillsaw-transcript-ratings h4 {
+	margin: 0 0 12px;
+	font-size: 13px;
+	font-weight: 600;
+	color: #1d2327;
+}
+.skillsaw-transcript-ratings-grid {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.skillsaw-rating-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	font-size: 13px;
+}
+.skillsaw-rating-skill {
+	flex: 1;
+	color: #1d2327;
+}
+
+/* ── About tab ───────────────────────────────────────────────────────────── */
+.skillsaw-about {
+	margin-top: 24px;
+}
+.skillsaw-about-body {
+	max-width: 680px;
+	font-size: 14px;
+	line-height: 1.7;
+	color: #1d2327;
+}
+.skillsaw-about-body h2 {
+	font-size: 16px;
+	font-weight: 600;
+	margin: 28px 0 8px;
+	color: #1d2327;
+}
+.skillsaw-about-body h2:first-child {
+	margin-top: 0;
+}
+.skillsaw-about-body p,
+.skillsaw-about-body ul {
+	margin: 0 0 14px;
+}
+.skillsaw-about-body ul {
+	padding-left: 20px;
+	list-style: disc;
+}
+.skillsaw-about-body li {
+	margin-bottom: 4px;
+}
+.skillsaw-about-feedback {
+	margin-top: 28px;
+	padding-top: 16px;
+	border-top: 1px solid #dcdcde;
+	color: #50575e;
+}
+.skillsaw-about-version {
+	font-size: 12px;
+	color: #787c82;
+	margin: 0 0 20px;
+}
+
+/* ── Document skill checkboxes ───────────────────────────────────────────── */
+.skillsaw-doc-skills-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 6px 0 8px 20px;
+	border-bottom: 1px solid #f0f0f0;
+}
+.skillsaw-doc-skills-row--critique {
+	padding-left: 36px;
+	background: #fafafa;
+}
+.skillsaw-doc-skills-label {
+	font-size: 11px;
+	font-weight: 600;
+	color: #787c82;
+	text-transform: uppercase;
+	letter-spacing: .03em;
+	white-space: nowrap;
+	padding-top: 2px;
+	min-width: 108px;
+}
+.skillsaw-doc-skill-checkboxes {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 12px;
+}
+.skillsaw-skill-checkbox-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 12px;
+	color: #1d2327;
+	cursor: pointer;
+}
+.skillsaw-skill-checkbox-label input[type="checkbox"] {
+	margin: 0;
+	cursor: pointer;
+}
+
+/* Unassigned skill chips */
+.skillsaw-chip--unassigned {
+	border-color: #c0392b !important;
+	color: #c0392b !important;
+	background: #fdf2f2 !important;
+}
+.skillsaw-chip--unassigned .skillsaw-chip-remove {
+	color: #c0392b !important;
+}
+.skillsaw-unassigned-notice {
+	font-size: 12px;
+	color: #c0392b;
+	margin: 4px 0 8px;
+	padding: 6px 10px;
+	background: #fdf2f2;
+	border-left: 3px solid #c0392b;
+	border-radius: 0 2px 2px 0;
+}
+
+/* ── Session tabs in transcript modal ───────────────────────────────────────── */
+.skillsaw-session-tabs {
+	display: flex;
+	gap: 4px;
+	margin-bottom: 16px;
+	border-bottom: 1px solid #e0e0e0;
+	padding-bottom: 0;
+}
+
+.skillsaw-session-tab {
+	background: none;
+	border: none;
+	border-bottom: 2px solid transparent;
+	padding: 6px 12px;
+	cursor: pointer;
+	font-size: 13px;
+	color: #555;
+	font-family: inherit;
+	display: flex;
+	align-items: center;
+	margin-bottom: -1px;
+	border-radius: 3px 3px 0 0;
+	transition: color 0.1s;
+}
+
+.skillsaw-session-tab:hover {
+	color: #1d2327;
+	background: #f6f7f7;
+}
+
+.skillsaw-session-tab--active {
+	color: #1d2327;
+	border-bottom-color: #2271b1;
+	font-weight: 600;
+}

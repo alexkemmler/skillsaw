@@ -20,11 +20,12 @@
 						type="password"
 						id="anthropic_key"
 						name="anthropic_key"
-						value="<?php echo esc_attr( Skillsaw_Settings::get_anthropic_key() ); ?>"
+						value="<?php echo Skillsaw_Settings::get_anthropic_key() ? '••••••••' : ''; ?>"
 						class="regular-text"
 						autocomplete="off"
+						placeholder="<?php echo Skillsaw_Settings::get_anthropic_key() ? '' : 'sk-ant-…'; ?>"
 					>
-					<p class="description">From Automattic's Anthropic account. Used for all Claude API calls.</p>
+					<p class="description">From Automattic's Anthropic account. Used for all Claude API calls. Leave unchanged to keep the existing key.</p>
 				</td>
 			</tr>
 			<tr>
@@ -36,11 +37,12 @@
 						type="password"
 						id="greenhouse_key"
 						name="greenhouse_key"
-						value="<?php echo esc_attr( Skillsaw_Settings::get_greenhouse_key() ); ?>"
+						value="<?php echo Skillsaw_Settings::get_greenhouse_key() ? '••••••••' : ''; ?>"
 						class="regular-text"
 						autocomplete="off"
+						placeholder="<?php echo Skillsaw_Settings::get_greenhouse_key() ? '' : 'Enter key…'; ?>"
 					>
-					<p class="description">Harvest API key for pushing candidate transcripts and ratings to Greenhouse.</p>
+					<p class="description">Harvest API key for pushing candidate transcripts and ratings to Greenhouse. Leave unchanged to keep the existing key.</p>
 				</td>
 			</tr>
 			<tr>
@@ -56,6 +58,21 @@
 						class="regular-text"
 					>
 					<p class="description">Your Greenhouse job board token (e.g. <code>automattic</code>). Found in Greenhouse under Dev Center.</p>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row">
+					<label for="greenhouse_user_id">Greenhouse User ID</label>
+				</th>
+				<td>
+					<input
+						type="text"
+						id="greenhouse_user_id"
+						name="greenhouse_user_id"
+						value="<?php echo esc_attr( Skillsaw_Settings::get_greenhouse_user_id() ); ?>"
+						class="regular-text"
+					>
+					<p class="description">Greenhouse user ID to attribute activity notes to (numeric). Found in your Greenhouse profile URL.</p>
 				</td>
 			</tr>
 		</table>

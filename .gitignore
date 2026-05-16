@@ -1,2 +1,23 @@
 node_modules/
-assets/js/
+
+# Build artifacts (assets/js and assets/css are intentionally committed)
+src/**/*.map
+
+# Environment / secrets — never commit these
+.env
+.env.*
+*.env
+secrets.*
+config.local.php
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ZIP packages — build on demand, don't track in git
+*.zip
+
+# Design handoff assets
+design_handoff_skillsaw/

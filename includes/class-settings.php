@@ -10,7 +10,7 @@ class Skillsaw_Settings {
 	}
 
 	public static function set( $key, $value ) {
-		update_option( 'skillsaw_' . $key, $value );
+		update_option( 'skillsaw_' . $key, $value, false );
 	}
 
 	public static function get_anthropic_key() {
@@ -23,5 +23,9 @@ class Skillsaw_Settings {
 
 	public static function get_greenhouse_board_token() {
 		return self::get( 'greenhouse_board_token' );
+	}
+
+	public static function get_greenhouse_user_id() {
+		return self::get( 'greenhouse_user_id' );
 	}
 }

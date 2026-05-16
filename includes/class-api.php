@@ -164,6 +164,7 @@ class Skillsaw_API {
 	public function get_roles( $request ) {
 		global $wpdb;
 
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- no user input; table name is from trusted $wpdb->prefix.
 		$roles = $wpdb->get_results(
 			"SELECT * FROM {$wpdb->prefix}skillsaw_roles ORDER BY created_at DESC",
 			ARRAY_A
@@ -1212,6 +1213,12 @@ class Skillsaw_API {
 
 		wp_schedule_single_event( time(), 'skillsaw_evaluate_session', array( $session['id'] ) );
 
+		// Also propagate identity here in case endSession() never fired
+		// (e.g. the candidate submitted the form directly).
+		if ( $email ) {
+			$this->propagate_identity_to_siblings( $session, $name, $email );
+		}
+
 		return rest_ensure_response( array( 'ok' => true ) );
 	}
 
@@ -1257,11 +1264,12 @@ class Skillsaw_API {
 	}
 
 	private function get_client_ip() {
-		// On VIP (and most proxied hosts) the real IP is in X-Forwarded-For.
-		// Take only the first entry to avoid header spoofing.
+		// On proxied/VIP infrastructure the real client IP is appended to
+		// X-Forwarded-For by the trusted edge proxy — take the LAST entry,
+		// not the first, so a client cannot spoof it by prepending a fake IP.
 		if ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
-			$forwarded = explode( ',', $_SERVER['HTTP_X_FORWARDED_FOR'] );
-			$ip = trim( $forwarded[0] );
+			$forwarded = array_map( 'trim', explode( ',', $_SERVER['HTTP_X_FORWARDED_FOR'] ) );
+			$ip        = end( $forwarded );
 			if ( filter_var( $ip, FILTER_VALIDATE_IP ) ) {
 				return $ip;
 			}

@@ -485,8 +485,8 @@ export default function CandidatesTab() {
 		if ( search ) {
 			const q = search.toLowerCase();
 			if (
-				! g.candidate_name.toLowerCase().includes( q ) &&
-				! g.candidate_email.toLowerCase().includes( q )
+				! ( g.candidate_name  || '' ).toLowerCase().includes( q ) &&
+				! ( g.candidate_email || '' ).toLowerCase().includes( q )
 			) return false;
 		}
 

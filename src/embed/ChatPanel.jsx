@@ -129,6 +129,31 @@ function SkillPickerMessage( { roleSkills, onConfirm } ) {
 	);
 }
 
+// ─── Document picker (shown when multiple critique docs available) ─────────────
+
+function DocPickerMessage( { docs, onPick, disabled } ) {
+	return (
+		<MsgRow who="bot">
+			<div className="sw-bubble sw-bubble--bot">
+				<p>There { docs.length === 1 ? 'is' : 'are' } { docs.length } document{ docs.length === 1 ? '' : 's' } available to critique. Which would you like to start with?</p>
+				<div className="sw-actions">
+					{ docs.map( ( doc ) => (
+						<button
+							key={ doc.id }
+							type="button"
+							className="sw-action-btn"
+							onClick={ () => onPick( doc ) }
+							disabled={ disabled }
+						>
+							{ doc.display_name || doc.name || `Document ${ doc.id }` }
+						</button>
+					) ) }
+				</div>
+			</div>
+		</MsgRow>
+	);
+}
+
 // ─── Document critique card ───────────────────────────────────────────────────
 
 function CritiqueDocCard( { docName, critiqueText, docUrl, docExt, instructions } ) {
@@ -282,10 +307,10 @@ function OpeningMessage( { roleTitle, roleSkills, hasCritique, onChoose, disable
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function ChatPanel( { roleId, active, hasCritique, roleTitle, roleSkills, nonce, rootUrl } ) {
+export default function ChatPanel( { roleId, active, hasCritique, roleTitle, roleSkills, critiqueDocs, nonce, rootUrl } ) {
 	const base = rootUrl.replace( /\/$/, '' ) + '/skillsaw/v1';
 
-	// phase: 'idle' | 'starting' | 'chatting' | 'complete' | 'expired' | 'error'
+	// phase: 'idle' | 'starting' | 'chatting' | 'between_critiques' | 'complete' | 'expired' | 'error'
 	const [ phase,        setPhase        ] = useState( 'idle' );
 	const [ mode,         setMode         ] = useState( null );
 	const [ sessionToken, setSessionToken ] = useState( null );
@@ -293,20 +318,32 @@ export default function ChatPanel( { roleId, active, hasCritique, roleTitle, rol
 	const [ input,        setInput        ] = useState( '' );
 	const [ isSending,    setIsSending    ] = useState( false );
 	const [ isUploading,  setIsUploading  ] = useState( false );
-	const [ chosenMode,   setChosenMode   ] = useState( null ); // tracks which button was pressed
+	const [ chosenMode,   setChosenMode   ] = useState( null );
 	const [ errorMsg,     setErrorMsg     ] = useState( null );
 
 	// pendingSkillPicker: { messageId } — non-null while waiting for skill selection
-	const [ pendingSkillPicker, setPendingSkillPicker ] = useState( null );
+	const [ pendingSkillPicker,  setPendingSkillPicker  ] = useState( null );
 
-	const scrollRef   = useRef( null );
-	const textareaRef = useRef( null );
+	// pendingDocPicker: true when waiting for doc selection before starting critique session
+	const [ pendingDocPicker,    setPendingDocPicker    ] = useState( false );
+
+	// Multi-critique tracking
+	const [ critiquedDocIds,     setCritiquedDocIds     ] = useState( new Set() );
+	const [ lastCritiqueDocName, setLastCritiqueDocName ] = useState( '' );
+
+	const safeCritiqueDocs = Array.isArray( critiqueDocs ) ? critiqueDocs : [];
+
+	// Docs still available to critique (not yet done this page visit)
+	const remainingDocs = safeCritiqueDocs.filter( ( d ) => ! critiquedDocIds.has( String( d.id ) ) );
+
+	const scrollRef    = useRef( null );
+	const textareaRef  = useRef( null );
 	const fileInputRef = useRef( null );
 
 	// ── Scroll to bottom ──────────────────────────────────────────────────────
 	useEffect( () => {
 		scrollRef.current?.scrollTo( { top: scrollRef.current.scrollHeight, behavior: 'smooth' } );
-	}, [ messages, isSending, isUploading, pendingSkillPicker ] );
+	}, [ messages, isSending, isUploading, pendingSkillPicker, pendingDocPicker ] );
 
 	// ── Auto-resize textarea ──────────────────────────────────────────────────
 	useEffect( () => {
@@ -356,16 +393,36 @@ export default function ChatPanel( { roleId, active, hasCritique, roleTitle, rol
 
 	async function chooseMode( selectedMode ) {
 		setChosenMode( selectedMode );
-		setPhase( 'starting' );
 		setErrorMsg( null );
 
+		if ( selectedMode === 'critique' && safeCritiqueDocs.length > 1 ) {
+			// Multiple docs available — show picker before starting session.
+			setPendingDocPicker( true );
+			setPhase( 'chatting' ); // show the chat area (picker will appear in messages)
+			return;
+		}
+
+		// Upload mode, or critique with exactly one doc.
+		const docId = selectedMode === 'critique' && safeCritiqueDocs.length === 1
+			? safeCritiqueDocs[ 0 ].id
+			: null;
+		await startSession( selectedMode, docId );
+	}
+
+	async function startSession( selectedMode, critiqueDocId ) {
+		setPhase( 'starting' );
+		setPendingDocPicker( false );
+
 		try {
+			const body = { role_id: roleId, mode: selectedMode };
+			if ( critiqueDocId ) body.critique_doc_id = critiqueDocId;
+
 			const data = await apiFetch(
 				`${ base }/sessions/start`,
 				{
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify( { role_id: roleId, mode: selectedMode } ),
+					body: JSON.stringify( body ),
 				},
 				nonce
 			);
@@ -374,6 +431,11 @@ export default function ChatPanel( { roleId, active, hasCritique, roleTitle, rol
 			setMode( selectedMode );
 
 			if ( selectedMode === 'critique' ) {
+				// Track this doc as critiqued.
+				if ( critiqueDocId ) {
+					setCritiquedDocIds( ( prev ) => new Set( [ ...prev, String( critiqueDocId ) ] ) );
+				}
+				setLastCritiqueDocName( data.critique_doc_name || '' );
 				setMessages( [ {
 					type:         'critique_doc',
 					docName:      data.critique_doc_name,
@@ -382,6 +444,8 @@ export default function ChatPanel( { roleId, active, hasCritique, roleTitle, rol
 					docExt:       data.critique_doc_ext  || null,
 					instructions: data.candidate_note,
 				} ] );
+			} else {
+				setMessages( [] );
 			}
 
 			setPhase( 'chatting' );
@@ -395,7 +459,7 @@ export default function ChatPanel( { roleId, active, hasCritique, roleTitle, rol
 
 	async function sendMessage() {
 		const text = input.trim();
-		if ( ! text || isSending || isUploading || pendingSkillPicker ) return;
+		if ( ! text || isSending || isUploading || pendingSkillPicker || pendingDocPicker ) return;
 
 		setInput( '' );
 		setIsSending( true );
@@ -450,8 +514,6 @@ export default function ChatPanel( { roleId, active, hasCritique, roleTitle, rol
 				{ method: 'POST', body: formData },
 				nonce
 			);
-			// Show skill picker instead of bot text reply — skill picker will
-			// send a follow-up message once the user confirms.
 			setPendingSkillPicker( { messageId: data.message_id } );
 		} catch ( err ) {
 			if ( err.code === 'session_expired' ) {
@@ -473,7 +535,6 @@ export default function ChatPanel( { roleId, active, hasCritique, roleTitle, rol
 		const { messageId } = pendingSkillPicker;
 		setPendingSkillPicker( null );
 
-		// Save skills to DB (best-effort, non-blocking)
 		apiFetch(
 			`${ base }/sessions/${ sessionToken }/messages/${ messageId }/skills`,
 			{
@@ -484,7 +545,6 @@ export default function ChatPanel( { roleId, active, hasCritique, roleTitle, rol
 			nonce
 		).catch( () => {} );
 
-		// Tell Claude which skills were tagged so it can acknowledge
 		const skillList = skills.join( ', ' );
 		const ackText   = `I've tagged this document for the following skills: ${ skillList }.`;
 
@@ -512,6 +572,12 @@ export default function ChatPanel( { roleId, active, hasCritique, roleTitle, rol
 		setIsSending( false );
 	}
 
+	// ── Doc picker selection ──────────────────────────────────────────────────
+
+	async function handleDocPick( doc ) {
+		await startSession( 'critique', doc.id );
+	}
+
 	// ── End session ───────────────────────────────────────────────────────────
 
 	async function endSession() {
@@ -523,6 +589,20 @@ export default function ChatPanel( { roleId, active, hasCritique, roleTitle, rol
 				body: JSON.stringify( { name: '', email: '' } ),
 			} );
 		} catch ( _ ) {}
+
+		// After critiquing a doc, check if any remain.
+		// remainingDocs is computed from state, but state update for critiquedDocIds
+		// may not have flushed yet — recompute directly.
+		if ( mode === 'critique' ) {
+			const stillRemaining = safeCritiqueDocs.filter(
+				( d ) => ! critiquedDocIds.has( String( d.id ) )
+			);
+			if ( stillRemaining.length > 0 ) {
+				setPhase( 'between_critiques' );
+				return;
+			}
+		}
+
 		setPhase( 'complete' );
 	}
 
@@ -604,7 +684,7 @@ export default function ChatPanel( { roleId, active, hasCritique, roleTitle, rol
 
 	// ── Composer state ────────────────────────────────────────────────────────
 
-	const composerDisabled = phase !== 'chatting' || isSending || isUploading || !! pendingSkillPicker;
+	const composerDisabled = phase !== 'chatting' || isSending || isUploading || !! pendingSkillPicker || pendingDocPicker;
 	const showUploadBtn    = phase === 'chatting' && mode === 'upload';
 	const canSend          = !! input.trim() && ! composerDisabled;
 
@@ -615,6 +695,56 @@ export default function ChatPanel( { roleId, active, hasCritique, roleTitle, rol
 			<section className="skillsaw-chat-panel skillsaw-chat-panel--inactive" aria-label="Skillsaw conversation">
 				<div className="sw-full-state">
 					<p className="sw-inactive-msg">We are currently not accepting new applications for this role.</p>
+				</div>
+			</section>
+		);
+	}
+
+	// ── Between critiques ─────────────────────────────────────────────────────
+
+	if ( phase === 'between_critiques' ) {
+		// Recompute remaining now that we're in this phase.
+		const docsLeft = safeCritiqueDocs.filter( ( d ) => ! critiquedDocIds.has( String( d.id ) ) );
+		return (
+			<section className="skillsaw-chat-panel" aria-label="Skillsaw conversation">
+				<header className="sw-chat-header">
+					<span className="sw-ch-mark" aria-hidden="true">S</span>
+					<div>
+						<div className="sw-ch-title">Skillsaw</div>
+						{ roleTitle && (
+							<div className="sw-ch-sub">{ roleTitle } · Application chat</div>
+						) }
+					</div>
+				</header>
+				<div className="sw-full-state">
+					{ lastCritiqueDocName && (
+						<p>Thanks for critiquing <strong>{ lastCritiqueDocName }</strong>.</p>
+					) }
+					<p>Would you like to critique another document?</p>
+					<div className="sw-actions" style={ { flexDirection: 'column', alignItems: 'flex-start', gap: 8 } }>
+						{ docsLeft.map( ( doc ) => (
+							<button
+								key={ doc.id }
+								type="button"
+								className="sw-action-btn"
+								onClick={ () => {
+									setMessages( [] );
+									setSessionToken( null );
+									startSession( 'critique', doc.id );
+								} }
+							>
+								{ doc.display_name || doc.name || `Document ${ doc.id }` }
+							</button>
+						) ) }
+						<button
+							type="button"
+							className="sw-action-btn"
+							style={ { background: 'transparent', color: '#555', border: '1px solid #ccc' } }
+							onClick={ () => setPhase( 'complete' ) }
+						>
+							No thanks, I'm done
+						</button>
+					</div>
 				</div>
 			</section>
 		);
@@ -706,6 +836,14 @@ export default function ChatPanel( { roleId, active, hasCritique, roleTitle, rol
 
 				{ messages.map( renderMessage ) }
 
+				{ pendingDocPicker && (
+					<DocPickerMessage
+						docs={ remainingDocs }
+						onPick={ handleDocPick }
+						disabled={ phase === 'starting' }
+					/>
+				) }
+
 				{ pendingSkillPicker && (
 					<SkillPickerMessage
 						roleSkills={ roleSkills }
@@ -756,7 +894,9 @@ export default function ChatPanel( { roleId, active, hasCritique, roleTitle, rol
 							? 'Conversation complete — refresh the page to start over'
 							: pendingSkillPicker
 								? 'Please confirm the skills above first…'
-								: 'Type your message… (Enter to send)'
+								: pendingDocPicker
+									? 'Choose a document above to begin…'
+									: 'Type your message… (Enter to send)'
 					}
 					rows={ 1 }
 					disabled={ composerDisabled || phase === 'complete' || phase === 'idle' }
@@ -765,22 +905,22 @@ export default function ChatPanel( { roleId, active, hasCritique, roleTitle, rol
 				<button
 					type="button"
 					className="sw-send-btn"
-					onClick={ phase === 'chatting' && ! pendingSkillPicker ? sendMessage : endSession }
+					onClick={ phase === 'chatting' && ! pendingSkillPicker && ! pendingDocPicker ? sendMessage : endSession }
 					disabled={
 						phase === 'complete' || phase === 'idle' || phase === 'starting'
 							? true
-							: isSending || isUploading || !! pendingSkillPicker
+							: isSending || isUploading || !! pendingSkillPicker || pendingDocPicker
 								? true
 								: phase === 'chatting'
 									? ! canSend
 									: false
 					}
 				>
-					{ phase === 'chatting' ? 'Send' : 'Send' }
+					Send
 				</button>
 			</div>
 
-			{ phase === 'chatting' && (
+			{ phase === 'chatting' && ! pendingDocPicker && (
 				<div style={ { display: 'flex', justifyContent: 'flex-end', paddingRight: 14, marginTop: -4, marginBottom: 2 } }>
 					<button
 						type="button"

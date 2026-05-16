@@ -33,6 +33,9 @@ class Skillsaw_Activator {
 		if ( ! in_array( 'archived_at', $cols, true ) ) {
 			$wpdb->query( "ALTER TABLE `{$table}` ADD COLUMN `archived_at` datetime DEFAULT NULL" );
 		}
+		if ( ! in_array( 'critique_doc_id', $cols, true ) ) {
+			$wpdb->query( "ALTER TABLE `{$table}` ADD COLUMN `critique_doc_id` bigint(20) UNSIGNED DEFAULT NULL" );
+		}
 		// phpcs:enable
 
 		update_option( 'skillsaw_db_version', SKILLSAW_VERSION );
@@ -96,6 +99,7 @@ class Skillsaw_Activator {
 				gh_pushed_at datetime DEFAULT NULL,
 				gh_push_error text NOT NULL DEFAULT '',
 				archived_at datetime DEFAULT NULL,
+				critique_doc_id bigint(20) UNSIGNED DEFAULT NULL,
 				PRIMARY KEY (id),
 				UNIQUE KEY session_token (session_token),
 				KEY role_id (role_id),

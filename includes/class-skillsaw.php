@@ -78,13 +78,22 @@ class Skillsaw {
 
 		$active = $role['status'] === 'active';
 
-		$has_critique = $active && (bool) $wpdb->get_var(
-			$wpdb->prepare(
-				"SELECT COUNT(*) FROM {$wpdb->prefix}skillsaw_documents
-				 WHERE role_id = %d AND is_critique_version = 1",
-				$role_id
-			)
-		);
+		$critique_docs = array();
+		if ( $active ) {
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT c.id, COALESCE(p.name, c.name) as display_name
+					 FROM {$wpdb->prefix}skillsaw_documents c
+					 LEFT JOIN {$wpdb->prefix}skillsaw_documents p ON p.id = c.parent_document_id
+					 WHERE c.role_id = %d AND c.is_critique_version = 1
+					 ORDER BY c.created_at ASC",
+					$role_id
+				),
+				ARRAY_A
+			);
+			$critique_docs = $rows ?: array();
+		}
+		$has_critique = ! empty( $critique_docs );
 
 		$skills = $active ? $wpdb->get_col(
 			$wpdb->prepare(
@@ -96,12 +105,13 @@ class Skillsaw {
 		self::$embed_on_page = true;
 
 		return sprintf(
-			'<div class="skillsaw-embed" data-role-id="%d" data-active="%s" data-has-critique="%s" data-role-title="%s" data-role-skills="%s"></div>',
+			'<div class="skillsaw-embed" data-role-id="%d" data-active="%s" data-has-critique="%s" data-role-title="%s" data-role-skills="%s" data-critique-docs="%s"></div>',
 			esc_attr( $role_id ),
 			$active ? 'true' : 'false',
 			$has_critique ? 'true' : 'false',
 			esc_attr( $role['title'] ),
-			esc_attr( wp_json_encode( $skills ) )
+			esc_attr( wp_json_encode( $skills ) ),
+			esc_attr( wp_json_encode( $critique_docs ) )
 		);
 	}
 

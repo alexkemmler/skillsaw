@@ -982,13 +982,28 @@ class Skillsaw_API {
 			return $token;
 		}
 
+		// Store the chosen critique doc against this session (if provided).
+		$critique_doc_id = 0;
+		if ( $mode === 'critique' ) {
+			$critique_doc_id = intval( $request->get_param( 'critique_doc_id' ) );
+			if ( $critique_doc_id ) {
+				$wpdb->update(
+					"{$wpdb->prefix}skillsaw_sessions",
+					array( 'critique_doc_id' => $critique_doc_id ),
+					array( 'session_token' => $token )
+				);
+			}
+		}
+
 		$response = array(
 			'session_token' => $token,
 			'mode'          => $mode,
 		);
 
 		if ( $mode === 'critique' ) {
-			$critique = $this->get_critique_for_role( $role_id );
+			$critique = $critique_doc_id
+				? $this->get_critique_by_id( $critique_doc_id, $role_id )
+				: $this->get_critique_for_role( $role_id );
 			if ( ! $critique ) {
 				return new WP_Error( 'no_critique', 'No critique document available for this role.', array( 'status' => 404 ) );
 			}
@@ -1040,7 +1055,16 @@ class Skillsaw_API {
 		$sessions->save_message( $session['id'], 'user', $content );
 
 		$skills        = $this->get_role_skills( $session['role_id'] );
-		$critique_text = $session['mode'] === 'critique' ? $this->get_critique_text_for_role( $session['role_id'] ) : null;
+		$critique_text = null;
+		if ( $session['mode'] === 'critique' ) {
+			if ( ! empty( $session['critique_doc_id'] ) ) {
+				$c = $this->get_critique_by_id( (int) $session['critique_doc_id'], $session['role_id'] );
+				$critique_text = $c ? $c['text'] : null;
+			} else {
+				// Legacy fallback: use most recent critique doc.
+				$critique_text = $this->get_critique_text_for_role( $session['role_id'] );
+			}
+		}
 		$system        = $this->build_system_prompt( $session, $skills, $session['mode'], $critique_text );
 		$messages      = $sessions->get_messages_for_claude( $session['id'] );
 
@@ -1320,6 +1344,38 @@ class Skillsaw_API {
 		}
 		// For PDF/DOCX, return base64 — Claude receives it as a document block.
 		return base64_encode( file_get_contents( $path ) );
+	}
+
+	private function get_critique_by_id( $doc_id, $role_id ) {
+		global $wpdb;
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT c.critique_text, c.attachment_id, p.name as parent_name
+				 FROM {$wpdb->prefix}skillsaw_documents c
+				 LEFT JOIN {$wpdb->prefix}skillsaw_documents p ON p.id = c.parent_document_id
+				 WHERE c.id = %d AND c.role_id = %d AND c.is_critique_version = 1",
+				$doc_id,
+				$role_id
+			)
+		);
+		if ( ! $row ) {
+			return null;
+		}
+		if ( ! $row->attachment_id && ! $row->critique_text ) {
+			return null;
+		}
+		$url = $row->attachment_id ? wp_get_attachment_url( $row->attachment_id ) : null;
+		$ext = null;
+		if ( $row->attachment_id ) {
+			$file = get_attached_file( $row->attachment_id );
+			$ext  = $file ? strtolower( pathinfo( $file, PATHINFO_EXTENSION ) ) : null;
+		}
+		return array(
+			'text'     => $row->critique_text,
+			'doc_name' => $row->parent_name ?: 'Document for review',
+			'url'      => $url,
+			'ext'      => $ext,
+		);
 	}
 
 	private function get_critique_for_role( $role_id ) {

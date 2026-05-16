@@ -117,6 +117,12 @@ class Skillsaw_Evaluator {
 			return;
 		}
 
+		// Hold off until the candidate has identified themselves via the application form.
+		// endSession() fires finalize with an empty name; the form submit provides the real one.
+		if ( empty( $session['candidate_name'] ) ) {
+			return;
+		}
+
 		// Don't push if already succeeded with a name present.
 		if ( ! empty( $session['gh_pushed_at'] ) && ! empty( $session['candidate_name'] ) ) {
 			return;

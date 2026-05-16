@@ -1199,6 +1199,11 @@ class Skillsaw_API {
 			if ( $name || $email ) {
 				$sessions->update_identity( $session['id'], $name, $email );
 				wp_schedule_single_event( time(), 'skillsaw_evaluate_session', array( $session['id'] ) );
+				// Propagate identity to any sibling sessions (same IP + role, no email yet)
+				// so that all critique docs for this candidate are pushed together.
+				if ( $email ) {
+					$this->propagate_identity_to_siblings( $session, $name, $email );
+				}
 			}
 			return rest_ensure_response( array( 'ok' => true ) );
 		}
@@ -1213,6 +1218,39 @@ class Skillsaw_API {
 	// -------------------------------------------------------------------------
 	// Helpers
 	// -------------------------------------------------------------------------
+
+	/**
+	 * When a candidate submits the application form (providing their name + email),
+	 * find any other complete sessions for the same candidate (matched by ip_hash +
+	 * role_id) that are still anonymous, update their identity, and re-schedule their
+	 * evaluation so they all get pushed to Greenhouse together.
+	 */
+	private function propagate_identity_to_siblings( array $current_session, string $name, string $email ) {
+		global $wpdb;
+
+		$sibling_ids = $wpdb->get_col( $wpdb->prepare(
+			"SELECT id FROM {$wpdb->prefix}skillsaw_sessions
+			 WHERE ip_hash          = %s
+			 AND role_id            = %d
+			 AND id                 != %d
+			 AND status             = 'complete'
+			 AND ( candidate_email  = '' OR candidate_email IS NULL )
+			 AND archived_at IS NULL",
+			$current_session['ip_hash'],
+			$current_session['role_id'],
+			$current_session['id']
+		) );
+
+		if ( empty( $sibling_ids ) ) {
+			return;
+		}
+
+		$sessions = new Skillsaw_Sessions();
+		foreach ( $sibling_ids as $sibling_id ) {
+			$sessions->update_identity( (int) $sibling_id, $name, $email );
+			wp_schedule_single_event( time(), 'skillsaw_evaluate_session', array( (int) $sibling_id ) );
+		}
+	}
 
 	public function admin_permission() {
 		return current_user_can( 'manage_options' );

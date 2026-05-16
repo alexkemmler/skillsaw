@@ -8,11 +8,14 @@ const STATUS_OPTIONS = [
 	{ label: 'Inactive', value: 'inactive' },
 ];
 
-function SkillChips( { skills, onRemove } ) {
+function SkillChips( { skills, onRemove, unassigned = [] } ) {
 	return (
 		<div className="skillsaw-chips">
 			{ skills.map( ( skill ) => (
-				<span key={ skill } className="skillsaw-chip">
+				<span
+					key={ skill }
+					className={ `skillsaw-chip ${ unassigned.includes( skill ) ? 'skillsaw-chip--unassigned' : '' }` }
+				>
 					{ skill }
 					{ onRemove && (
 						<button
@@ -77,13 +80,52 @@ function CopyEmbedButton( { role } ) {
 	);
 }
 
-function DocumentRow( { doc, role, onCritiqueUploaded, onDelete } ) {
-	const [ suggesting,       setSuggesting       ] = useState( false );
-	const [ suggestions,      setSuggestions      ] = useState( '' );
-	const [ showSuggestions,  setShowSuggestions  ] = useState( false );
+function DocSkillCheckboxes( { docId, roleId, currentSkills, allSkills, onChange } ) {
+	// Empty currentSkills = legacy "all skills" — show all checked.
+	const [ selected, setSelected ] = useState(
+		currentSkills && currentSkills.length > 0 ? currentSkills : [ ...allSkills ]
+	);
+
+	const toggle = async ( skill ) => {
+		const next = selected.includes( skill )
+			? selected.filter( ( s ) => s !== skill )
+			: [ ...selected, skill ];
+		setSelected( next );
+		onChange( next );
+		try {
+			await apiFetch( {
+				path:   `/skillsaw/v1/roles/${ roleId }/documents/${ docId }`,
+				method: 'PUT',
+				data:   { skills: next },
+			} );
+		} catch {}
+	};
+
+	if ( ! allSkills.length ) return null;
+
+	return (
+		<div className="skillsaw-doc-skill-checkboxes">
+			{ allSkills.map( ( skill ) => (
+				<label key={ skill } className="skillsaw-skill-checkbox-label">
+					<input
+						type="checkbox"
+						checked={ selected.includes( skill ) }
+						onChange={ () => toggle( skill ) }
+					/>
+					{ skill }
+				</label>
+			) ) }
+		</div>
+	);
+}
+
+function DocumentRow( { doc, role, allSkills, onCritiqueUploaded, onDelete, onSkillsChange, onCritiqueSkillsChange } ) {
+	const [ suggesting,        setSuggesting        ] = useState( false );
+	const [ suggestions,       setSuggestions       ] = useState( '' );
+	const [ showSuggestions,   setShowSuggestions   ] = useState( false );
 	const [ uploadingCritique, setUploadingCritique ] = useState( false );
-	const [ error,            setError            ] = useState( '' );
-	const [ critiqueExpanded, setCritiqueExpanded  ] = useState( false );
+	const [ error,             setError             ] = useState( '' );
+	const [ critiqueExpanded,  setCritiqueExpanded  ] = useState( false );
 	const critiqueInputRef = useRef( null );
 
 	const handleSuggestMistakes = async () => {
@@ -130,7 +172,6 @@ function DocumentRow( { doc, role, onCritiqueUploaded, onDelete } ) {
 			<div className="skillsaw-doc-row">
 				<span className="skillsaw-doc-type">{ doc.type.toUpperCase() }</span>
 				<span className="skillsaw-doc-name">{ doc.name }</span>
-				<SkillChips skills={ doc.skills } />
 				<div className="skillsaw-doc-actions">
 					{ doc.url && (
 						<a
@@ -171,6 +212,20 @@ function DocumentRow( { doc, role, onCritiqueUploaded, onDelete } ) {
 					</Button>
 				</div>
 			</div>
+
+			{ allSkills.length > 0 && (
+				<div className="skillsaw-doc-skills-row">
+					<span className="skillsaw-doc-skills-label">Skills evaluated:</span>
+					<DocSkillCheckboxes
+						docId={ doc.id }
+						roleId={ role.id }
+						currentSkills={ doc.skills }
+						allSkills={ allSkills }
+						onChange={ ( skills ) => onSkillsChange( doc.id, skills ) }
+					/>
+				</div>
+			) }
+
 			{ error && <p className="skillsaw-error">{ error }</p> }
 
 			{ showSuggestions && (
@@ -206,7 +261,6 @@ function DocumentRow( { doc, role, onCritiqueUploaded, onDelete } ) {
 					<div className="skillsaw-doc-row skillsaw-doc-row--critique">
 						<span className="skillsaw-pill skillsaw-pill--critique">Critique</span>
 						<span className="skillsaw-doc-name">{ doc.critique.name }</span>
-						<SkillChips skills={ doc.critique.skills } />
 						<div className="skillsaw-doc-actions">
 							{ doc.critique.url ? (
 								<a
@@ -228,6 +282,20 @@ function DocumentRow( { doc, role, onCritiqueUploaded, onDelete } ) {
 							) }
 						</div>
 					</div>
+
+					{ allSkills.length > 0 && (
+						<div className="skillsaw-doc-skills-row skillsaw-doc-skills-row--critique">
+							<span className="skillsaw-doc-skills-label">Skills evaluated:</span>
+							<DocSkillCheckboxes
+								docId={ doc.critique.id }
+								roleId={ role.id }
+								currentSkills={ doc.critique.skills }
+								allSkills={ allSkills }
+								onChange={ ( skills ) => onCritiqueSkillsChange( doc.id, skills ) }
+							/>
+						</div>
+					) }
+
 					{ critiqueExpanded && ! doc.critique.url && (
 						<div className="skillsaw-critique-preview">
 							{ doc.critique.critique_text
@@ -253,12 +321,20 @@ function RoleConfig( { role, onSave, onClose } ) {
 		skills:            [ ...( role.skills || [] ) ],
 		documents:         [ ...( role.documents || [] ) ],
 	} );
-	const [ newSkill, setNewSkill ] = useState( '' );
-	const [ saving, setSaving ]     = useState( false );
-	const [ error, setError ]       = useState( '' );
+	const [ newSkill,  setNewSkill  ] = useState( '' );
+	const [ saving,    setSaving    ] = useState( false );
+	const [ error,     setError     ] = useState( '' );
 	const [ uploading, setUploading ] = useState( false );
 
 	const set = ( key ) => ( val ) => setForm( ( f ) => ( { ...f, [ key ]: val } ) );
+
+	// Compute which skills have no reference document assigned.
+	const assignedByRefDocs = new Set();
+	form.documents.forEach( ( doc ) => {
+		const docSkills = doc.skills && doc.skills.length > 0 ? doc.skills : form.skills;
+		docSkills.forEach( ( s ) => assignedByRefDocs.add( s ) );
+	} );
+	const unassignedSkills = form.skills.filter( ( s ) => ! assignedByRefDocs.has( s ) );
 
 	const addSkill = () => {
 		const trimmed = newSkill.trim();
@@ -270,6 +346,26 @@ function RoleConfig( { role, onSave, onClose } ) {
 
 	const removeSkill = ( skill ) => {
 		setForm( ( f ) => ( { ...f, skills: f.skills.filter( ( s ) => s !== skill ) } ) );
+	};
+
+	const handleDocSkillsChange = ( docId, skills ) => {
+		setForm( ( f ) => ( {
+			...f,
+			documents: f.documents.map( ( d ) =>
+				d.id === docId ? { ...d, skills } : d
+			),
+		} ) );
+	};
+
+	const handleCritiqueSkillsChange = ( docId, skills ) => {
+		setForm( ( f ) => ( {
+			...f,
+			documents: f.documents.map( ( d ) =>
+				d.id === docId
+					? { ...d, critique: d.critique ? { ...d.critique, skills } : d.critique }
+					: d
+			),
+		} ) );
 	};
 
 	const handleSave = async () => {
@@ -372,7 +468,16 @@ function RoleConfig( { role, onSave, onClose } ) {
 
 			<div className="skillsaw-config-section">
 				<h4>Skills evaluated</h4>
-				<SkillChips skills={ form.skills } onRemove={ removeSkill } />
+				<SkillChips
+					skills={ form.skills }
+					onRemove={ removeSkill }
+					unassigned={ form.documents.length > 0 ? unassignedSkills : [] }
+				/>
+				{ form.documents.length > 0 && unassignedSkills.length > 0 && (
+					<p className="skillsaw-unassigned-notice">
+						Skills highlighted in red have no reference document assigned. The chatbot will attempt to evaluate these using any available document. It is recommended to assign a reference document for each skill.
+					</p>
+				) }
 				<div className="skillsaw-add-skill">
 					<TextControl
 						placeholder="Add a skill…"
@@ -393,8 +498,11 @@ function RoleConfig( { role, onSave, onClose } ) {
 						key={ doc.id }
 						doc={ doc }
 						role={ role }
+						allSkills={ form.skills }
 						onCritiqueUploaded={ handleCritiqueGenerated }
 						onDelete={ handleDeleteDoc }
+						onSkillsChange={ handleDocSkillsChange }
+						onCritiqueSkillsChange={ handleCritiqueSkillsChange }
 					/>
 				) ) }
 				<div className="skillsaw-upload-area">

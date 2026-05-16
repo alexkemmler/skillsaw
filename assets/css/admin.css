@@ -618,3 +618,62 @@
 	color: #787c82;
 	margin: 0 0 20px;
 }
+
+/* ── Document skill checkboxes ───────────────────────────────────────────── */
+.skillsaw-doc-skills-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 6px 0 8px 20px;
+	border-bottom: 1px solid #f0f0f0;
+}
+.skillsaw-doc-skills-row--critique {
+	padding-left: 36px;
+	background: #fafafa;
+}
+.skillsaw-doc-skills-label {
+	font-size: 11px;
+	font-weight: 600;
+	color: #787c82;
+	text-transform: uppercase;
+	letter-spacing: .03em;
+	white-space: nowrap;
+	padding-top: 2px;
+	min-width: 108px;
+}
+.skillsaw-doc-skill-checkboxes {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 12px;
+}
+.skillsaw-skill-checkbox-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 12px;
+	color: #1d2327;
+	cursor: pointer;
+}
+.skillsaw-skill-checkbox-label input[type="checkbox"] {
+	margin: 0;
+	cursor: pointer;
+}
+
+/* Unassigned skill chips */
+.skillsaw-chip--unassigned {
+	border-color: #c0392b !important;
+	color: #c0392b !important;
+	background: #fdf2f2 !important;
+}
+.skillsaw-chip--unassigned .skillsaw-chip-remove {
+	color: #c0392b !important;
+}
+.skillsaw-unassigned-notice {
+	font-size: 12px;
+	color: #c0392b;
+	margin: 4px 0 8px;
+	padding: 6px 10px;
+	background: #fdf2f2;
+	border-left: 3px solid #c0392b;
+	border-radius: 0 2px 2px 0;
+}

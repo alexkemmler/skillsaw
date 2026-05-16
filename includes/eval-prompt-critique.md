@@ -12,6 +12,12 @@ A document critique serves as a way to demonstrate the candidate's skill level v
 
 {{CONTEXT_SECTIONS}}
 
+## Skill scope for this critique
+
+Only rate skills that are listed as in scope below. Skills marked "not in scope" must be omitted from your output entirely — do not include them as keys in the JSON response.
+
+{{SKILL_DOCUMENT_MAP}}
+
 ## How to evaluate skills
 
 Each skill should be evaluated separately, taking into account the full content of the critique. A single critique does not necessarily have to address all skills associated with the role, but can address as many as are available, plus others specified by the candidate. It is possible for candidates to earn "obvious_success" and "obvious_failure" for different skills even from the same critique. Skills should be evaluated independently to the fullest extent possible. If the candidate earns different ratings for the same skill from different submissions, the better rating should be used.

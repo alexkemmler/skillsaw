@@ -277,6 +277,57 @@ class Skillsaw_Evaluator {
 			return array();
 		}
 
+		// Build skill → reference document mapping.
+		$skill_doc_map_text = '';
+		if ( ! empty( $skills ) && $has_ref_docs ) {
+			if ( $is_critique ) {
+				// For critique mode, use the critique document's skill tags.
+				$critique_skills = $this->get_critique_doc_skills( $session['role_id'] );
+				$skill_doc_map   = array();
+				foreach ( $skills as $s ) {
+					// If critique has no skill tags, all skills are in scope.
+					if ( empty( $critique_skills ) || in_array( $s, $critique_skills, true ) ) {
+						$skill_doc_map[ $s ] = 'the critique document';
+					} else {
+						$skill_doc_map[ $s ] = null; // out of scope for this critique
+					}
+				}
+			} else {
+				// For upload mode, map each skill to its assigned reference document(s).
+				$skill_doc_map = array_fill_keys( $skills, array() );
+				foreach ( $ref_docs as $doc ) {
+					// Empty skills on a document = legacy / applies to all skills.
+					$doc_skills = ( is_array( $doc['skills'] ) && ! empty( $doc['skills'] ) )
+						? $doc['skills']
+						: $skills;
+					foreach ( $doc_skills as $s ) {
+						if ( array_key_exists( $s, $skill_doc_map ) ) {
+							$skill_doc_map[ $s ][] = $doc['name'];
+						}
+					}
+				}
+			}
+
+			$map_lines = array();
+			foreach ( $skill_doc_map as $skill => $docs ) {
+				if ( $is_critique ) {
+					if ( $docs === null ) {
+						$map_lines[] = "- \"{$skill}\": not in scope for this critique document — do not rate this skill.";
+					} else {
+						$map_lines[] = "- \"{$skill}\": evaluate using the candidate's critique of the provided document.";
+					}
+				} else {
+					if ( empty( $docs ) ) {
+						$map_lines[] = "- \"{$skill}\": No reference document assigned — evaluate based on any available evidence.";
+					} else {
+						$doc_names = '"' . implode( '", "', array_map( 'esc_html', $docs ) ) . '"';
+						$map_lines[] = "- \"{$skill}\": benchmark using reference document(s) {$doc_names}.";
+					}
+				}
+			}
+			$skill_doc_map_text = implode( "\n", $map_lines );
+		}
+
 		// Build context sections (structural — not editable prose).
 		$context = '';
 		if ( ! $has_uploads ) {
@@ -305,8 +356,8 @@ class Skillsaw_Evaluator {
 
 		// Substitute all placeholders.
 		$text = str_replace(
-			array( '{{ROLE_TITLE}}', '{{SKILL_LIST}}', '{{CONTEXT_SECTIONS}}', '{{CALIBRATION_NOTE}}' ),
-			array( $role_title, implode( ', ', $skills ), $context, $calibration ),
+			array( '{{ROLE_TITLE}}', '{{SKILL_LIST}}', '{{CONTEXT_SECTIONS}}', '{{CALIBRATION_NOTE}}', '{{SKILL_DOCUMENT_MAP}}' ),
+			array( $role_title, implode( ', ', $skills ), $context, $calibration, $skill_doc_map_text ),
 			$text
 		);
 
@@ -380,6 +431,24 @@ class Skillsaw_Evaluator {
 	// -------------------------------------------------------------------------
 	// Response parser
 	// -------------------------------------------------------------------------
+
+	private function get_critique_doc_skills( $role_id ) {
+		global $wpdb;
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT skills FROM {$wpdb->prefix}skillsaw_documents
+				 WHERE role_id = %d AND is_critique_version = 1 AND attachment_id IS NOT NULL
+				 ORDER BY created_at DESC LIMIT 1",
+				$role_id
+			),
+			ARRAY_A
+		);
+		if ( ! $row ) {
+			return array();
+		}
+		$skills = json_decode( $row['skills'], true );
+		return ( is_array( $skills ) && ! empty( $skills ) ) ? $skills : array();
+	}
 
 	private function parse_ratings( $response, array $skills ) {
 		$json = preg_replace( '/^```(?:json)?\s*/i', '', trim( $response ) );

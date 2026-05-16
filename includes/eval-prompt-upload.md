@@ -10,6 +10,12 @@ The candidate submitted their own work sample. Assess how well it demonstrates e
 
 {{CONTEXT_SECTIONS}}
 
+## Skill-to-document assignment
+
+Each skill must **only** be evaluated using the reference document(s) assigned to it below. Do not use a reference document as a benchmark for a skill it is not assigned to. If no reference document is assigned to a skill, evaluate it holistically based on any available evidence.
+
+{{SKILL_DOCUMENT_MAP}}
+
 ## How to evaluate skills
 
 Each skill should be evaluated separately, taking into account the full document. A given single document does not necessarily have to demonstrate all skills available in the role, but can demonstrate as many skills as are available, plus others specified by the candidate. It is possible for candidates to earn "obvious_success" and "obvious_failure" for different skills even from the same document. Skills should be evaluated independently to the fullest extent possible. If the candidate earns different ratings for the same skill from different document uploads, the better rating should be used.

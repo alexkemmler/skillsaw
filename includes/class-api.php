@@ -54,9 +54,16 @@ class Skillsaw_API {
 		) );
 
 		register_rest_route( self::NAMESPACE, '/roles/(?P<role_id>\d+)/documents/(?P<id>\d+)', array(
-			'methods'             => WP_REST_Server::DELETABLE,
-			'callback'            => array( $this, 'delete_document' ),
-			'permission_callback' => array( $this, 'admin_permission' ),
+			array(
+				'methods'             => WP_REST_Server::DELETABLE,
+				'callback'            => array( $this, 'delete_document' ),
+				'permission_callback' => array( $this, 'admin_permission' ),
+			),
+			array(
+				'methods'             => WP_REST_Server::EDITABLE,
+				'callback'            => array( $this, 'update_document' ),
+				'permission_callback' => array( $this, 'admin_permission' ),
+			),
 		) );
 
 		register_rest_route( self::NAMESPACE, '/roles/(?P<role_id>\d+)/documents/(?P<id>\d+)/generate-critique', array(
@@ -465,6 +472,37 @@ class Skillsaw_API {
 		return rest_ensure_response( array( 'deleted' => true ) );
 	}
 
+	public function update_document( $request ) {
+		global $wpdb;
+
+		$doc = $wpdb->get_row( $wpdb->prepare(
+			"SELECT * FROM {$wpdb->prefix}skillsaw_documents WHERE id = %d AND role_id = %d",
+			$request['id'],
+			$request['role_id']
+		) );
+
+		if ( ! $doc ) {
+			return new WP_Error( 'not_found', 'Document not found.', array( 'status' => 404 ) );
+		}
+
+		$skills = $request->get_param( 'skills' );
+		if ( null !== $skills ) {
+			$wpdb->update(
+				"{$wpdb->prefix}skillsaw_documents",
+				array( 'skills' => wp_json_encode( array_values( (array) $skills ) ) ),
+				array( 'id' => (int) $request['id'] )
+			);
+		}
+
+		$updated = $wpdb->get_row( $wpdb->prepare(
+			"SELECT * FROM {$wpdb->prefix}skillsaw_documents WHERE id = %d",
+			$request['id']
+		), ARRAY_A );
+		$updated['skills'] = json_decode( $updated['skills'], true ) ?: array();
+
+		return rest_ensure_response( $updated );
+	}
+
 	public function generate_critique( $request ) {
 		global $wpdb;
 
@@ -681,12 +719,16 @@ class Skillsaw_API {
 
 		$name = pathinfo( $doc->name, PATHINFO_FILENAME ) . ' — critique.' . $ext;
 
+		// Inherit skill assignments from parent document.
+		$parent_skills = json_decode( $doc->skills, true );
+		$parent_skills = is_array( $parent_skills ) ? $parent_skills : array();
+
 		$wpdb->insert( "{$wpdb->prefix}skillsaw_documents", array(
 			'role_id'             => $doc->role_id,
 			'attachment_id'       => $attachment_id,
 			'name'                => $name,
 			'type'                => $ext,
-			'skills'              => $doc->skills,
+			'skills'              => wp_json_encode( $parent_skills ),
 			'is_critique_version' => 1,
 			'parent_document_id'  => $doc->id,
 			'critique_text'       => $text,

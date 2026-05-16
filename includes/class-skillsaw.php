@@ -56,7 +56,7 @@ class Skillsaw {
 
 	public function render_shortcode( $atts ) {
 		$atts    = shortcode_atts( array( 'role' => '' ), $atts );
-		$role_id = intval( $atts['role'] );
+		$role_id = (int) preg_replace( '/\D/', '', $atts['role'] );
 
 		if ( ! $role_id ) {
 			return '';
@@ -111,7 +111,7 @@ class Skillsaw {
 
 	public function render_apply_shortcode( $atts ) {
 		$atts    = shortcode_atts( array( 'role' => '' ), $atts );
-		$role_id = intval( $atts['role'] );
+		$role_id = (int) preg_replace( '/\D/', '', $atts['role'] );
 
 		if ( ! $role_id ) {
 			return '';
